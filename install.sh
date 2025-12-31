@@ -32,12 +32,21 @@ mv -f /tmp/theme-hook/theme-set $HOME/.config/omarchy/hooks/
 mkdir -p $HOME/.config/omarchy/hooks/theme-set.d/
 mv -f /tmp/theme-hook/theme-set.d/* $HOME/.config/omarchy/hooks/theme-set.d/
 
+# Create plugin hook directory and copy scripts
+if [[ -d /tmp/theme-hook/plugins/theme-set.d ]]; then
+    mkdir -p $HOME/.config/omarchy/hooks/plugins/theme-set.d/
+    mv -f /tmp/theme-hook/plugins/theme-set.d/* $HOME/.config/omarchy/hooks/plugins/theme-set.d/
+fi
+
 # Remove any new temp files
 rm -rf /tmp/theme-hook
 
 # Update permissions
 chmod +x $HOME/.config/omarchy/hooks/theme-set
 chmod +x $HOME/.config/omarchy/hooks/theme-set.d/*
+if [[ -d $HOME/.config/omarchy/hooks/plugins/theme-set.d ]]; then
+    chmod +x $HOME/.config/omarchy/hooks/plugins/theme-set.d/*
+fi
 
 # Update Omarchy theme
 echo "Executing theme hook.."

@@ -1,4 +1,4 @@
-# DEVPLAN: Plugin Framework for Omarchy Theme Hook
+# DEVPLAN: Plugin Extensions for Omarchy Theme Hook
 
 ## Context and current state (review)
 - The entrypoint is `theme-set`, which reads `~/.config/omarchy/current/theme/alacritty.toml`, exports color variables, and executes executable scripts from `~/.config/omarchy/hooks/theme-set.d/` in glob order.
@@ -6,61 +6,45 @@
   - generate a derived theme file under `~/.config/omarchy/current/theme/`, and/or
   - copy/link into each app’s config, and/or
   - apply changes directly (e.g., `gsettings`, `spicetify`, `vicinae theme set`).
-- Ordering is implicit via filename prefixes (00/10/20/etc) and glob order; there is no metadata or dependency management.
-- There is no standardized plugin packaging format, enable/disable mechanism, or install workflow beyond copying scripts into `theme-set.d`.
-- Runtime context is implicit (color variables, `require_restart`, `success`/`warning` helpers) and not formally documented for third-party authors.
+- Ordering is implicit via filename prefixes (00/10/20/etc) and glob order.
+- Runtime context is implicit (color variables, `require_restart`, `success`/`warning` helpers).
 
 ## Goals
-- Provide a stable, documented plugin interface so third parties can implement new hooks without editing core scripts.
-- Support structured metadata (name, description, version, hook targets, requirements, ordering/priority).
-- Allow easy enable/disable and safe discovery of plugins.
-- Preserve current behavior for existing `theme-set.d/*.sh` hooks during migration.
+- Keep things simple: plugins are just optional extensions to the existing hook.
+- Allow drop-in plugin scripts to run when `theme-set` fires, without reworking the core hook logic.
+- Preserve current behavior for existing `theme-set.d/*.sh` hooks.
 
 ## Non-goals
-- Rewriting every existing hook immediately.
-- Introducing a heavy dependency stack (avoid jq/yq requirement for baseline usage).
-- Changing the external Omarchy hook contract (keep `theme-set` as the hook entrypoint).
+- Rewriting existing hooks into a new framework.
+- Adding manifests, metadata, or dependency resolution.
+- Changing the external Omarchy hook contract (`theme-set` stays the entrypoint).
 
-## Proposed architecture
+## Proposed architecture (simple plugin extensions)
 
-### 1) Plugin layout and manifest
-Use a simple, bash-parsable manifest to avoid external dependencies.
+### 1) Plugin layout
+Plugins are just executable scripts. If a plugin script exists, `theme-set` runs it before continuing the normal flow.
 
 **Layout (installed plugin):**
 ```
 plugins/
-  <plugin-id>/
-    plugin.env
-    hooks/
-      theme-set.sh
-    assets/ (optional)
-    README.md (optional)
+  theme-set.d/
+    <plugin-name>.sh
 ```
 
-**`plugin.env` format (sourced by bash):**
-```
-PLUGIN_ID="waybar"
-PLUGIN_NAME="Waybar"
-PLUGIN_VERSION="0.1.0"
-PLUGIN_HOOKS="theme-set"
-PLUGIN_PRIORITY="10"
-PLUGIN_REQUIRES="waybar,omarchy-restart-waybar"
-```
+Example plugin name: `10-waybar-theme-dir.sh`
 
-Notes:
-- `PLUGIN_HOOKS` can be a comma-separated list to allow future hooks (e.g., `theme-set,theme-unset`).
-- `PLUGIN_PRIORITY` replaces filename prefixes; lower runs first.
-- `PLUGIN_REQUIRES` lists commands to check before running.
+Ordering remains filename prefix + glob order, consistent with `theme-set.d`.
 
-### 2) Discovery and enable/disable
-- Plugins live under `~/.config/omarchy/hooks/plugins/` (user space) and optionally a system dir like `/usr/share/omarchy/hooks/plugins/`.
-- Enablement via a lightweight registry:
-  - `~/.config/omarchy/hooks/plugins.enabled` containing one `PLUGIN_ID` per line, OR
-  - `plugins/enabled.d/<plugin-id>` as a symlink to the plugin directory.
-- If no registry is present, treat all discovered plugins as enabled (opt-out model). This is the preferred default.
+### 2) Discovery and execution model
+- Plugins live under `~/.config/omarchy/hooks/plugins/theme-set.d/`.
+- When `theme-set` runs:
+  1. Load colors and helper functions (current behavior).
+  2. Execute any executable plugin scripts in `plugins/theme-set.d/`.
+  3. Execute existing hooks in `theme-set.d/`.
+  4. Aggregate restarts (current behavior).
 
 ### 3) Runtime contract
-`theme-set` should export a stable environment for plugins:
+Plugins run in the same shell environment as the hook scripts and can use:
 - Theme context:
   - `OMARCHY_THEME_NAME`, `OMARCHY_THEME_DIR`, `OMARCHY_CURRENT_THEME_DIR`
 - Color exports (existing):
@@ -68,45 +52,25 @@ Notes:
 - Helpers:
   - `success`, `warning`, `error`, `skipped`, `require_restart`
 
-### 4) Execution model
-- `theme-set` becomes a dispatcher:
-  1. Load colors and helpers as it does now.
-  2. Load all plugin manifests.
-  3. Filter enabled plugins.
-  4. Check `PLUGIN_REQUIRES` before executing.
-  5. Execute `hooks/theme-set.sh` for each plugin in priority order.
-  6. Preserve current restart aggregation behavior.
-- Backward compatibility: if `theme-set.d/*.sh` exists, run those too (or provide a migration shim).
-- Plugins run in the shared shell environment for speed; avoid subshell isolation unless needed later.
+### 4) Backward compatibility
+The existing `theme-set.d/*.sh` execution stays unchanged. Plugins are additive and run first.
 
 ### 5) Developer experience
-- Provide a template plugin in `templates/plugin/` with a minimal manifest and a `theme-set.sh` skeleton.
-- Add docs in `README.md` or `docs/PLUGINS.md` showing:
-  - How to create a plugin directory.
-  - How to declare requirements.
-  - How to reference the exported color variables.
-  - How to request restarts.
+- Add a short section in `README.md` (or `docs/PLUGINS.md`) showing the plugin folder path and a minimal example.
 
 ## Implementation phases
 
 ### Phase 0: Baseline documentation
 - Add `DEVPLAN.md` (this file).
-- Add `docs/PLUGINS.md` with a concise authoring guide and a minimal example.
+- Add `docs/PLUGINS.md` (optional) with a concise authoring guide and a minimal example.
 
 ### Phase 1: Plugin runtime foundation
-- Add a small library (e.g., `lib/plugin-runtime.sh`) to:
-  - Discover plugin dirs.
-  - Source `plugin.env` safely.
-  - Sort by `PLUGIN_PRIORITY`.
-  - Check `PLUGIN_REQUIRES` and skip with a clear message.
 - Update `theme-set` to:
-  - Source the runtime library.
-  - Execute plugins for the `theme-set` hook.
-  - Keep the existing `theme-set.d` execution path for compatibility.
+  - Execute any scripts in `~/.config/omarchy/hooks/plugins/theme-set.d/` (if present).
+  - Then execute the existing `theme-set.d` scripts as today.
 
 ### Phase 2: Migration path
-- Provide a script (optional) to convert an existing `theme-set.d/*.sh` file into a plugin stub.
-- Migrate 1–2 core hooks as examples (e.g., Waybar and GTK) to validate the framework.
+- Migrate 1–2 enhancements as plugins (e.g., Waybar theme directory handling).
 
 ### Phase 3: Polishing and stability
 - Add structured logging to `~/.cache/omarchy/theme-hook.log` with plugin IDs and timestamps.
@@ -114,25 +78,14 @@ Notes:
 - Add `theme-hook list` and `theme-hook enable/disable` helper commands (optional).
 
 ## Open questions
-- Should plugin manifests be allowed to declare "provides" outputs (e.g., `waybar.css`) to avoid conflicts?
+- Do we want a simple enable/disable toggle (e.g., a `plugins.disabled.d/` folder), or is presence in the plugin folder enough?
 
 ## Minimal example plugin
 ```
-plugins/example/plugin.env
-plugins/example/hooks/theme-set.sh
+plugins/theme-set.d/10-example.sh
 ```
 
-`plugin.env`:
-```
-PLUGIN_ID="example"
-PLUGIN_NAME="Example"
-PLUGIN_VERSION="0.1.0"
-PLUGIN_HOOKS="theme-set"
-PLUGIN_PRIORITY="50"
-PLUGIN_REQUIRES=""
-```
-
-`hooks/theme-set.sh`:
+`10-example.sh`:
 ```
 #!/bin/bash
 # Uses exported colors from theme-set
