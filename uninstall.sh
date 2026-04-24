@@ -7,6 +7,7 @@ omarchy-show-logo
 echo "Uninstalling theme hook.."
 
 rm -rf /tmp/theme-hook/
+rm -rf $HOME/.local/bin/thctl
 rm -rf $HOME/.local/share/omarchy/bin/thctl
 rm -rf $HOME/.config/omarchy/hooks/theme-set.d/
 rm -rf $HOME/.config/omarchy/hooks/theme-set

@@ -23,8 +23,9 @@ git clone https://github.com/imbypass/omarchy-theme-hook.git /tmp/theme-hook > /
 rm -rf $HOME/.local/share/omarchy/bin/theme-hook-update > /dev/null 2>&1
 
 # Create a theme control alias
-mv -f /tmp/theme-hook/thctl $HOME/.local/share/omarchy/bin/thctl
-chmod +x $HOME/.local/share/omarchy/bin/thctl
+mkdir -p $HOME/.local/bin
+mv -f /tmp/theme-hook/thctl $HOME/.local/bin/thctl
+chmod +x $HOME/.local/bin/thctl
 
 # Copy theme-set hook to Omarchy hooks directory
 mv -f /tmp/theme-hook/theme-set $HOME/.config/omarchy/hooks/
