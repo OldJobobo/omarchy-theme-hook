@@ -15,16 +15,17 @@ fi
 # Remove any old temp files
 rm -rf /tmp/theme-hook/
 
-# Clone the Omarchy theme hook repository
-echo -e "Downloading theme hook.."
-git clone https://github.com/imbypass/omarchy-theme-hook.git /tmp/theme-hook > /dev/null 2>&1
+# Clone the Theme Hook Plugin Manager repository
+echo -e "Downloading thpm.."
+git clone --branch thpm --depth 1 https://github.com/OldJobobo/theme-hook-plugin-manager.git /tmp/theme-hook > /dev/null 2>&1
 
-# Remove any old update alias
-rm -rf $HOME/.local/share/omarchy/bin/theme-hook-update > /dev/null 2>&1
+# Remove legacy aliases from previous installs
+rm -f $HOME/.local/share/omarchy/bin/theme-hook-update > /dev/null 2>&1
+rm -f $HOME/.local/share/omarchy/bin/thctl > /dev/null 2>&1
 
-# Create a theme control alias
-mv -f /tmp/theme-hook/thctl $HOME/.local/share/omarchy/bin/thctl
-chmod +x $HOME/.local/share/omarchy/bin/thctl
+# Install the thpm CLI
+mv -f /tmp/theme-hook/thpm $HOME/.local/share/omarchy/bin/thpm
+chmod +x $HOME/.local/share/omarchy/bin/thpm
 
 # Copy theme-set hook to Omarchy hooks directory
 mv -f /tmp/theme-hook/theme-set $HOME/.config/omarchy/hooks/
@@ -40,8 +41,8 @@ rm -rf /tmp/theme-hook
 chmod +x $HOME/.config/omarchy/hooks/theme-set
 chmod +x $HOME/.config/omarchy/hooks/theme-set.d/*
 
-# Update Omarchy theme
-echo "Running theme hook.."
+# Run the theme-set hook to apply the current theme
+echo "Running theme-set hook.."
 omarchy-hook theme-set
 
 omarchy-show-done

@@ -43,12 +43,12 @@ get_hook_list() {
         done
     fi
 
-    echo -e "\nEnabled Hooklettes:"
+    echo -e "\nEnabled Plugins:"
     for hook in "${enabled_hooks[@]}"; do
         echo -e " $(dot "green")$hook"
     done
 
-    echo -e "\nDisabled Hooklettes:"
+    echo -e "\nDisabled Plugins:"
     for hook in "${disabled_hooks[@]}"; do
         echo -e " $(dot "red")$hook"
     done
@@ -64,7 +64,7 @@ enable_hooks() {
                 hook_name=$(basename "$old_hook" .sh)
                 hook_name=${hook_name#*-}
                 if [[ "$hook_name" == "$new_hook" ]]; then
-                    echo -e "$(dot "green")Hooklette Enabled: $hook_name \033[90m($old_hook)\033[0m"
+                    echo -e "$(dot "green")Plugin Enabled: $hook_name \033[90m($old_hook)\033[0m"
                     if [[ ! -x "$old_hook" ]]; then
                         chmod +x "$old_hook"
                     fi
@@ -86,7 +86,7 @@ disable_hooks() {
                 hook_name=$(basename "$old_hook" .sh)
                 hook_name=${hook_name#*-}
                 if [[ "$hook_name" == "$new_hook" ]]; then
-                    echo -e "$(dot "red")Hooklette Disabled: $hook_name \033[90m($old_hook)\033[0m"
+                    echo -e "$(dot "red")Plugin Disabled: $hook_name \033[90m($old_hook)\033[0m"
                     if [[ -x "$old_hook" ]]; then
                         chmod -x "$old_hook"
                     fi
@@ -182,25 +182,25 @@ th_run() {
 }
 
 th_install() {
-    curl -fsSL https://imbypass.github.io/omarchy-theme-hook/install.sh | bash
+    curl -fsSL https://raw.githubusercontent.com/OldJobobo/theme-hook-plugin-manager/thpm/install.sh | bash
 }
 
 th_uninstall() {
-    curl -fsSL https://imbypass.github.io/omarchy-theme-hook/uninstall.sh | bash
+    curl -fsSL https://raw.githubusercontent.com/OldJobobo/theme-hook-plugin-manager/thpm/uninstall.sh | bash
 }
 
 th_help() {
-    echo -e "Usage: thctl [command] [theme]"
+    echo -e "Usage: thpm [command] [plugin]"
     echo
     echo -e "Commands:"
     echo -e "$(dot "muted")  help       Show this help message"
-    echo -e "$(dot "muted")  enable     Enable a hooklette"
-    echo -e "$(dot "muted")  disable    Disable a hooklette"
-    echo -e "$(dot "muted")  list       List all available hooklettes"
-    echo -e "$(dot "muted")  open       Open the hooklettes directory"
-    echo -e "$(dot "muted")  run        Run/execute the theme hook"
-    echo -e "$(dot "muted")  update     Update the theme hook"
-    echo -e "$(dot "muted")  uninstall  Uninstall the theme hook"
+    echo -e "$(dot "muted")  enable     Enable a plugin"
+    echo -e "$(dot "muted")  disable    Disable a plugin"
+    echo -e "$(dot "muted")  list       List all available plugins"
+    echo -e "$(dot "muted")  open       Open the plugins directory"
+    echo -e "$(dot "muted")  run        Run/execute the theme-set hook"
+    echo -e "$(dot "muted")  update     Update thpm"
+    echo -e "$(dot "muted")  uninstall  Uninstall thpm"
 
 }
 

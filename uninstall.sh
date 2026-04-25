@@ -4,14 +4,15 @@ set -e
 
 omarchy-show-logo
 
-echo "Uninstalling theme hook.."
+echo "Uninstalling thpm.."
 
 rm -rf /tmp/theme-hook/
-rm -rf $HOME/.local/share/omarchy/bin/thctl
+rm -f $HOME/.local/share/omarchy/bin/thpm
+rm -f $HOME/.local/share/omarchy/bin/thctl
 rm -rf $HOME/.config/omarchy/hooks/theme-set.d/
 rm -rf $HOME/.config/omarchy/hooks/theme-set
 
-echo "Attempting to unapply theme hook.."
+echo "Attempting to revert applied themes.."
 
 # Remove Steam theme
 if command -v python >/dev/null 2>&1; then
@@ -41,6 +42,6 @@ if command -v vicinae >/dev/null 2>&1; then
     vicinae theme set vicinae-dark > /dev/null 2>&1
 fi
 
-echo "Uninstalled theme hook!"
+echo "Uninstalled thpm!"
 
 omarchy-show-done

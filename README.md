@@ -1,97 +1,153 @@
-
 <div align="center">
 
-![Preview](assets/preview.png)
+# Theme Hook Plugin Manager
 
-# Omarchy Theme Hook
-   
-[![Themed Apps](https://img.shields.io/badge/themed_apps-15-blue?style=for-the-badge&labelColor=0C0D11&color=A5CAB8)](https://github.com/imbypass/omarchy-theme-hook/tree/main/theme-set.d)
-[![GitHub Issues](https://img.shields.io/github/issues/imbypass/omarchy-theme-hook?style=for-the-badge&labelColor=0C0D11&color=EB7A73)](https://github.com/imbypass/omarchy-theme-hook/issues)
-[![GitHub Last Commit](https://img.shields.io/github/last-commit/imbypass/omarchy-theme-hook?style=for-the-badge&labelColor=0C0D11&color=8ECD84)](https://github.com/imbypass/omarchy-theme-hook/commits/main/)
-[![GitHub Stars](https://img.shields.io/github/stars/imbypass/omarchy-theme-hook?style=for-the-badge&labelColor=0C0D11&color=EFBE71)](https://github.com/imbypass/omarchy-theme-hook/stargazers)
-
-**A lightweight, clean solution to extending your Omarchy theme to other apps.**
+**A plugin manager for Omarchy's theme-set hook.** Run any number of small, independent theming tasks every time you change your Omarchy theme.
 
 </div>
 
-## Overview
-The Omarchy Theme Hook is a lightweight, clean solution to extending your Omarchy theme to other apps. It will check your Omarchy theme for the existence of any extended theme files and will install them automatically for you when a theme is applied. If a theme is applied that contains extended theme files, they will be copied to their proper folders. If the theme does *not* contain any extended theme files, a new set of each will be generated dynamically using the theme's Alacritty config and copied to their proper folders.
+> **Not affiliated with Omarchy.** This project is a fork of [imbypass/omarchy-theme-hook](https://github.com/imbypass/omarchy-theme-hook), reframed around a plugin-manager model. The upstream presents itself as *a* theme hook; in practice it is a runner that calls many independent scripts. This fork makes that model explicit: a single runner, a directory of plugins, a CLI to manage them.
 
-## Installing
-You can install the theme hook by running the following command:
+## Why
+
+Omarchy already provides a `theme-set` hook that fires whenever you switch themes. What it doesn't provide is a way to register *multiple* things to happen on that hook — theme Discord, theme GTK, theme Spotify, theme your own custom app, and so on.
+
+`thpm` plugs into Omarchy's `theme-set` hook with a small dispatcher and a directory of executable scripts. Each script — a **plugin** — is responsible for one concern (one app, one task). You can enable, disable, add, or replace plugins independently without touching the dispatcher.
+
+## How it works
+
 ```
-curl -fsSL https://imbypass.github.io/omarchy-theme-hook/install.sh | bash
+Omarchy theme change
+        │
+        ▼
+omarchy-hook theme-set                  ← Omarchy's built-in hook
+        │
+        ▼
+~/.config/omarchy/hooks/theme-set       ← thpm dispatcher
+        │  reads colors.toml, exports color vars + helpers
+        ▼
+~/.config/omarchy/hooks/theme-set.d/    ← plugin directory
+   ├── 00-fish.sh
+   ├── 10-gtk.sh
+   ├── 30-vscode.sh
+   ├── 40-firefox.sh
+   └── …
 ```
 
-## Updating
-You can update the theme hook by running the following command, or by re-running the installation script:
+Plugins run in lexicographic order, so the numeric prefix controls execution order. A plugin is "enabled" when its file is executable and "disabled" when it isn't.
+
+## Install
+
 ```
-thctl update
+curl -fsSL https://raw.githubusercontent.com/OldJobobo/theme-hook-plugin-manager/thpm/install.sh | bash
 ```
 
-## Theme Hook Controller (`thctl`)
-The Theme Hook Controller (`thctl`) is a command-line tool that allows you to manage your Theme Hook installation. It provides a simple interface for updating the hook as well as toggling hooklettes on and off.
-You can access it via the terminal by running `thctl`.
+## Update
 
-## Themed Apps
+```
+thpm update
+```
+
+Or re-run the install command above.
+
+## CLI: `thpm`
+
+| Command | Description |
+| --- | --- |
+| `thpm list` | Show enabled and disabled plugins |
+| `thpm enable <name>` | Enable a plugin |
+| `thpm disable <name>` | Disable a plugin |
+| `thpm run` | Run the theme-set hook now |
+| `thpm open` | Open the plugin directory in your file manager |
+| `thpm update` | Reinstall to pull the latest version |
+| `thpm uninstall` | Remove `thpm` |
+| `thpm help` | Show help |
+
+Enabling and disabling is just `chmod +x` / `chmod -x` under the hood — you can do it manually if you prefer.
+
+## Bundled plugins
+
 - Cava
 - Cursor
 - Discord
 - Firefox
+- Fish
+- Fzf
 - GTK (requires `adw-gtk-theme` from the AUR)
+- Heroic
+- nwg-dock-hyprland
 - QT6
+- Qutebrowser
 - Spotify
 - Steam
 - Superfile
+- Typora
 - Vicinae
 - VS Code
 - Waybar
 - Windsurf
 - Zed
-- Zen Browser (experimental - requires manual enabling of legacy userchrome styling)
+- Zen Browser (experimental — requires manual enabling of legacy userchrome styling)
 
-## Uninstalling
-You can remove the theme hook by running the following command:
+## Writing your own plugin
+
+A plugin is any executable shell script in `~/.config/omarchy/hooks/theme-set.d/`. The dispatcher exports color values and helper functions for you to use:
+
+**Color variables** (hex, no `#`): `primary_background`, `primary_foreground`, `cursor_color`, `selection_background`, `selection_foreground`, `normal_black` … `normal_white`, `bright_black` … `bright_white`. Each also has an `rgb_` prefixed form (e.g. `rgb_normal_blue`) returning `r, g, b`.
+
+**Helpers:** `success`, `warning`, `error`, `skipped`, `hex2rgb`, `rgb2hex`, `change_shade`, `require_restart <process-name>`.
+
+```bash
+#!/bin/bash
+# 50-myapp.sh
+
+config="$HOME/.config/myapp/theme.conf"
+[[ ! -f "$config" ]] && skipped "myapp"
+
+cat > "$config" <<EOF
+background = #$primary_background
+foreground = #$primary_foreground
+accent     = #$normal_blue
+EOF
+
+require_restart "myapp"
+success "myapp themed"
 ```
-curl -fsSL https://imbypass.github.io/omarchy-theme-hook/uninstall.sh | bash
+
+Name with a numeric prefix to control ordering: `10-` early, `40-` late.
+
+## Uninstall
+
+```
+curl -fsSL https://raw.githubusercontent.com/OldJobobo/theme-hook-plugin-manager/thpm/uninstall.sh | bash
 ```
 
 ## FAQ
 
-#### I installed the hook, but none of my apps are theming!
-1. The theme hook will generate and install themes, but cannot apply all of them.
-2. You may need to manually set the theme to "Omarchy" one time for each app that supports theming.
+#### I installed thpm but my apps aren't theming.
 
-#### My Firefox/Zen Browser isn't theming!
--  Firefox and Zen Browser may require manual enabling of legacy userchrome styling.
--  To do this, open the browser, go to `about:config`, search for `toolkit.legacyUserProfileCustomizations.stylesheets`, and set it to `true`.
+Some apps need a one-time manual theme selection. After install, set the theme to "Omarchy" in each app's settings panel.
 
-#### My Discord isn't theming!
-1. Make sure you are using a third-party Discord client, like Vesktop or Equibop.
-2. Apply your desired theme in Omarchy.
-3. Enable the Omarchy theme in Discord.
+#### Firefox / Zen Browser isn't theming.
 
-#### My Spotify isn't theming!
-1. Make sure that you *properly* installed Spicetify, including any permission edits that may need to be made for Linux systems.
-2. See a [[note for Linux users]](https://spicetify.app/docs/advanced-usage/installation#note-for-linux-users).
-3. Apply your desired theme in Omarchy.
+Open `about:config`, set `toolkit.legacyUserProfileCustomizations.stylesheets` to `true`, and restart the browser.
 
-#### My Spotify stopped theming!
-A Spotify client update may have caused Spicetify to stop working. You can fix this either by running `spicetify restore backup apply` or by reinstalling Spotify and Spicetify, and running `spicetify backup apply`.
+#### Discord isn't theming.
 
-#### I get a "colors.toml not found" error!
-Omarchy 3.3+ requires themes to include `colors.toml`. Update your theme to a version compatible with Omarchy 3.3+, or add a valid `colors.toml` file to the theme directory.
+Use a third-party client (Vesktop, Equibop), apply a theme in Omarchy, then enable the Omarchy theme in your Discord client's theme settings.
 
-#### What if I encounter issues?
-If you encounter any issues, please open an issue on the GitHub repository.
+#### Spotify isn't theming or stopped theming.
 
-#### What theme is shown in the showcase?
-Everpuccin.
-https://github.com/imbypass/omarchy-everpuccin-theme
+Make sure Spicetify is properly installed — see [the Spicetify Linux note](https://spicetify.app/docs/advanced-usage/installation#note-for-linux-users). If it stopped working after a Spotify update, run `spicetify restore backup apply`, or reinstall Spotify and Spicetify and run `spicetify backup apply`.
 
-#### Will you share your waybar configuration?
-It's on GitHub.
-https://github.com/imbypass/omarchy-waybar-bepi
+#### `colors.toml not found` error.
+
+Omarchy 3.3+ requires themes to ship a `colors.toml` file. Update your theme to a 3.3-compatible version, or add a valid `colors.toml` to the theme directory.
 
 ## Contributing
-I actively encourage everyone to contribute a theme for their favorite application. If you have a theme for an application, an upgrade to an existing script, or even just feature ideas, please open a pull or a feature request on the GitHub repository. I try my best to review and merge them quickly. As a general rule of thumb, try to keep any templates submitted limited to a single script file.
+
+Plugin contributions are welcome. If you have a script for an app that isn't bundled, open a PR. Keep plugins to a single script and avoid heavy dependencies.
+
+## Credits
+
+Forked from [imbypass/omarchy-theme-hook](https://github.com/imbypass/omarchy-theme-hook). Upstream contributors and plugin authors are credited via git history.
