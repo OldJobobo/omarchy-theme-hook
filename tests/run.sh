@@ -712,7 +712,7 @@ EOF
   make_stub_bin "$bin_dir" notify-send 'exit 0'
 
   PATH="$bin_dir:$PATH" HOME="$home_dir" "$ROOT_DIR/theme-set" >/dev/null
-  theme_count="$(rg -c "theme = 'omarchy'" "$config_file")"
+  theme_count="$(grep -c "theme = 'omarchy'" "$config_file")"
 
   assert_eq "1" "$theme_count" "cava plugin does not duplicate existing theme setting"
 }
