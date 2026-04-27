@@ -59,11 +59,14 @@ enable_hooks() {
     IFS=' ' read -ra hooks_array <<< "$hooks"
     hooks_array=("${hooks_array[@]:1}")
     for new_hook in "${hooks_array[@]}"; do
+        found=0
         if [[ -d ~/.config/omarchy/hooks/theme-set.d ]]; then
             for old_hook in ~/.config/omarchy/hooks/theme-set.d/*.sh; do
+                [[ -f "$old_hook" ]] || continue
                 hook_name=$(basename "$old_hook" .sh)
                 hook_name=${hook_name#*-}
                 if [[ "$hook_name" == "$new_hook" ]]; then
+                    found=1
                     echo -e "$(dot "green")Plugin Enabled: $hook_name \033[90m($old_hook)\033[0m"
                     if [[ ! -x "$old_hook" ]]; then
                         chmod +x "$old_hook"
@@ -73,6 +76,9 @@ enable_hooks() {
                 fi
             done
         fi
+        if [[ "$found" -eq 0 ]]; then
+            echo -e "$(dot "yellow")Plugin not found: $new_hook"
+        fi
     done
 }
 
@@ -81,11 +87,14 @@ disable_hooks() {
     IFS=' ' read -ra hooks_array <<< "$hooks"
     hooks_array=("${hooks_array[@]:1}")
     for new_hook in "${hooks_array[@]}"; do
+        found=0
         if [[ -d ~/.config/omarchy/hooks/theme-set.d ]]; then
             for old_hook in ~/.config/omarchy/hooks/theme-set.d/*.sh; do
+                [[ -f "$old_hook" ]] || continue
                 hook_name=$(basename "$old_hook" .sh)
                 hook_name=${hook_name#*-}
                 if [[ "$hook_name" == "$new_hook" ]]; then
+                    found=1
                     echo -e "$(dot "red")Plugin Disabled: $hook_name \033[90m($old_hook)\033[0m"
                     if [[ -x "$old_hook" ]]; then
                         chmod -x "$old_hook"
@@ -94,6 +103,9 @@ disable_hooks() {
                     echo
                 fi
             done
+        fi
+        if [[ "$found" -eq 0 ]]; then
+            echo -e "$(dot "yellow")Plugin not found: $new_hook"
         fi
     done
 }
