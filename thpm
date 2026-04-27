@@ -224,6 +224,7 @@ case $1 in
     update) th_install ;;
     up) th_install ;;
 
+    uninstall) th_uninstall ;;
     remove) th_uninstall ;;
     rm) th_uninstall ;;
 
