@@ -15,6 +15,14 @@ fi
 # Remove any old temp files
 rm -rf /tmp/theme-hook/
 
+disabled_plugins=()
+if [[ -d "$HOME/.config/omarchy/hooks/theme-set.d" ]]; then
+    for plugin in "$HOME"/.config/omarchy/hooks/theme-set.d/*.sh; do
+        [[ -f "$plugin" && ! -x "$plugin" ]] || continue
+        disabled_plugins+=("$(basename "$plugin")")
+    done
+fi
+
 # Clone the Theme Hook Plugin Manager repository
 echo -e "Downloading thpm.."
 git clone --branch thpm --depth 1 https://github.com/OldJobobo/theme-hook-plugin-manager.git /tmp/theme-hook > /dev/null 2>&1
@@ -40,6 +48,12 @@ rm -rf /tmp/theme-hook
 # Update permissions
 chmod +x $HOME/.config/omarchy/hooks/theme-set
 chmod +x $HOME/.config/omarchy/hooks/theme-set.d/*
+
+for plugin in "${disabled_plugins[@]}"; do
+    if [[ -f "$HOME/.config/omarchy/hooks/theme-set.d/$plugin" ]]; then
+        chmod -x "$HOME/.config/omarchy/hooks/theme-set.d/$plugin"
+    fi
+done
 
 # Run the theme-set hook to apply the current theme
 echo "Running theme-set hook.."
