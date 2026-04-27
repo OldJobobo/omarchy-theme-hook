@@ -182,6 +182,8 @@ thpm update
 
 You can also re-run the install command.
 
+Updating replaces bundled plugin files with the latest versions. If you want to customize a plugin, copy it to a new filename in the plugin folder first.
+
 ## Uninstall
 
 ```bash
