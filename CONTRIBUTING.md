@@ -32,11 +32,10 @@ For the plugin API and example script, see [docs/plugins.md](docs/plugins.md).
 
 ## Validation
 
-Before opening a pull request, syntax-check the shell scripts you touched:
+Before opening a pull request, run the test suite:
 
 ```bash
-bash -n thpm install.sh uninstall.sh theme-set
-for f in theme-set.d/*.sh; do bash -n "$f" || echo "FAIL: $f"; done
+tests/run.sh
 ```
 
 If you can test on Omarchy, also run:
