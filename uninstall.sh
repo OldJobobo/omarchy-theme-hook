@@ -15,17 +15,19 @@ rm -rf $HOME/.config/omarchy/hooks/theme-set
 echo "Attempting to revert applied themes.."
 
 # Remove Steam theme
-if command -v python >/dev/null 2>&1; then
-    cd $HOME/.local/share/steam-adwaita && ./install.py --uninstall > /dev/null 2>&1
+if command -v python >/dev/null 2>&1 && [[ -d "$HOME/.local/share/steam-adwaita" ]]; then
+    (cd "$HOME/.local/share/steam-adwaita" && ./install.py --uninstall) > /dev/null 2>&1 || true
 fi
 
 # Remove Spotify theme
 if command -v spicetify >/dev/null 2>&1; then
-    spicetify restore > /dev/null 2>&1
+    spicetify restore > /dev/null 2>&1 || true
 fi
 
 # Remove GTK theme
-gsettings set org.gnome.desktop.interface gtk-theme Adwaita > /dev/null 2>&1
+if command -v gsettings >/dev/null 2>&1; then
+    gsettings set org.gnome.desktop.interface gtk-theme Adwaita > /dev/null 2>&1 || true
+fi
 
 # Remove Qutebrowser theme
 if command -v qutebrowser >/dev/null 2>&1; then
@@ -39,7 +41,7 @@ fi
 
 # Remove Vicinae theme
 if command -v vicinae >/dev/null 2>&1; then
-    vicinae theme set vicinae-dark > /dev/null 2>&1
+    vicinae theme set vicinae-dark > /dev/null 2>&1 || true
 fi
 
 echo "Uninstalled thpm!"
