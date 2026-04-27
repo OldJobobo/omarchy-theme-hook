@@ -4,11 +4,19 @@ set -e
 
 # Install prerequisites
 if ! pacman -Qi "adw-gtk-theme" &>/dev/null; then
-    gum style --border normal --border-foreground 6 --padding "1 2" \
-    "\"adw-gtk-theme\" is required to theme GTK applications."
+    if command -v gum >/dev/null 2>&1; then
+        gum style --border normal --border-foreground 6 --padding "1 2" \
+        "\"adw-gtk-theme\" is required to theme GTK applications."
 
-    if gum confirm "Would you like to install \"adw-gtk-theme\"?"; then
-        sudo pacman -S adw-gtk-theme
+        if gum confirm "Would you like to install \"adw-gtk-theme\"?"; then
+            sudo pacman -S adw-gtk-theme
+        fi
+    else
+        echo "\"adw-gtk-theme\" is required to theme GTK applications."
+        read -r -p "Would you like to install \"adw-gtk-theme\"? [y/N] " install_adw_gtk
+        case "$install_adw_gtk" in
+            y|Y|yes|YES) sudo pacman -S adw-gtk-theme ;;
+        esac
     fi
 fi
 
