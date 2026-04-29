@@ -83,6 +83,7 @@ Some apps need a one-time theme selection inside their own settings. See [Troubl
 - Foot live colors
 - fzf
 - Superfile
+- tmux
 
 **Games and media**
 

@@ -805,6 +805,84 @@ test_swaync_plugin_prefers_named_theme_over_current_theme() {
   assert_eq "colors-current" "$(cat "$target_dir/colors.css")" "swaync plugin still uses current colors.css"
 }
 
+test_tmux_plugin_skips_without_theme_conf() {
+  local home_dir="$TMP_ROOT/tmux-skip-home"
+  local bin_dir="$TMP_ROOT/tmux-skip-bin"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local target_file="$home_dir/.config/tmux/omarchy-theme.conf"
+
+  write_colors_fixture "$home_dir"
+  mkdir -p "$hook_dir" "$bin_dir"
+  cp "$ROOT_DIR/theme-set.d/10-tmux.sh" "$hook_dir/10-tmux.sh"
+  chmod +x "$hook_dir/10-tmux.sh"
+  make_stub_bin "$bin_dir" tmux 'printf "tmux should not be called\n" >&2; exit 1'
+  make_stub_bin "$bin_dir" pgrep 'exit 1'
+  make_stub_bin "$bin_dir" notify-send 'exit 0'
+
+  PATH="$bin_dir:$PATH" HOME="$home_dir" "$ROOT_DIR/theme-set" >/dev/null
+
+  assert_file_missing "$target_file" "tmux plugin skips when theme has no tmux.conf"
+}
+
+test_tmux_plugin_installs_theme_and_reloads() {
+  local home_dir="$TMP_ROOT/tmux-home"
+  local bin_dir="$TMP_ROOT/tmux-bin"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local theme_file="$home_dir/.config/omarchy/current/theme/tmux.conf"
+  local target_file="$home_dir/.config/tmux/omarchy-theme.conf"
+  local config_file="$home_dir/.config/tmux/tmux.conf"
+  local tmux_log="$TMP_ROOT/tmux.log"
+  local source_count
+
+  write_colors_fixture "$home_dir"
+  mkdir -p "$hook_dir" "$bin_dir"
+  cp "$ROOT_DIR/theme-set.d/10-tmux.sh" "$hook_dir/10-tmux.sh"
+  chmod +x "$hook_dir/10-tmux.sh"
+  printf 'set -g status-style "bg=#101112,fg=#f1f2f3"\n' > "$theme_file"
+  cat > "$bin_dir/tmux" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$tmux_log"
+EOF
+  chmod +x "$bin_dir/tmux"
+  make_stub_bin "$bin_dir" pgrep 'exit 1'
+  make_stub_bin "$bin_dir" notify-send 'exit 0'
+
+  PATH="$bin_dir:$PATH" HOME="$home_dir" "$ROOT_DIR/theme-set" >/dev/null
+  PATH="$bin_dir:$PATH" HOME="$home_dir" "$ROOT_DIR/theme-set" >/dev/null
+
+  assert_file_exists "$target_file" "tmux plugin installs theme file"
+  assert_eq "$(cat "$theme_file")" "$(cat "$target_file")" "tmux plugin copies current theme tmux.conf"
+  assert_file_exists "$config_file" "tmux plugin creates xdg tmux config"
+  assert_contains "$(cat "$config_file")" "source-file ~/.config/tmux/omarchy-theme.conf" "tmux plugin sources stable theme file"
+  source_count="$(grep -Fc "source-file ~/.config/tmux/omarchy-theme.conf" "$config_file")"
+  assert_eq "1" "$source_count" "tmux plugin does not duplicate source line"
+  assert_contains "$(cat "$tmux_log")" "source-file $target_file" "tmux plugin reloads installed theme"
+}
+
+test_tmux_plugin_prefers_existing_legacy_config() {
+  local home_dir="$TMP_ROOT/tmux-legacy-home"
+  local bin_dir="$TMP_ROOT/tmux-legacy-bin"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local theme_file="$home_dir/.config/omarchy/current/theme/tmux.conf"
+  local legacy_config="$home_dir/.tmux.conf"
+  local xdg_config="$home_dir/.config/tmux/tmux.conf"
+
+  write_colors_fixture "$home_dir"
+  mkdir -p "$hook_dir" "$bin_dir"
+  cp "$ROOT_DIR/theme-set.d/10-tmux.sh" "$hook_dir/10-tmux.sh"
+  chmod +x "$hook_dir/10-tmux.sh"
+  printf 'set -g pane-active-border-style "fg=#444444"\n' > "$theme_file"
+  printf 'set -g mouse on\n' > "$legacy_config"
+  make_stub_bin "$bin_dir" tmux 'exit 0'
+  make_stub_bin "$bin_dir" pgrep 'exit 1'
+  make_stub_bin "$bin_dir" notify-send 'exit 0'
+
+  PATH="$bin_dir:$PATH" HOME="$home_dir" "$ROOT_DIR/theme-set" >/dev/null
+
+  assert_contains "$(cat "$legacy_config")" "source-file ~/.config/tmux/omarchy-theme.conf" "tmux plugin uses existing legacy tmux config"
+  assert_file_missing "$xdg_config" "tmux plugin does not create xdg config when legacy config exists"
+}
+
 test_vscode_plugin_skips_when_theme_provides_vscode_json() {
   local home_dir="$TMP_ROOT/vscode-skip-home"
   local bin_dir="$TMP_ROOT/vscode-skip-bin"
@@ -1081,6 +1159,7 @@ print_coverage_summary() {
     "$ROOT_DIR/theme-set.d/00-fish.sh"
     "$ROOT_DIR/theme-set.d/00-fzf.sh"
     "$ROOT_DIR/theme-set.d/10-superfile.sh"
+    "$ROOT_DIR/theme-set.d/10-tmux.sh"
     "$ROOT_DIR/theme-set.d/25-swaync.sh"
     "$ROOT_DIR/theme-set.d/26-foot-live-colors.sh"
     "$ROOT_DIR/theme-set.d/30-vscode.sh"
@@ -1129,6 +1208,9 @@ main() {
   test_superfile_plugin_writes_theme_and_requests_restart
   test_swaync_plugin_installs_theme_files_and_reloads
   test_swaync_plugin_prefers_named_theme_over_current_theme
+  test_tmux_plugin_skips_without_theme_conf
+  test_tmux_plugin_installs_theme_and_reloads
+  test_tmux_plugin_prefers_existing_legacy_config
   test_vscode_plugin_skips_when_theme_provides_vscode_json
   test_vscode_plugin_patches_extension_manifest_and_installs_theme
   test_theme_set_extracts_colors_with_leading_whitespace_and_comments
