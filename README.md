@@ -24,10 +24,27 @@ curl -fsSL https://raw.githubusercontent.com/OldJobobo/theme-hook-plugin-manager
 
 The installer applies your current Omarchy theme after setup.
 
+### Install GTK Theme Dependency
+
+The GTK plugin requires Omarchy's Adwaita-compatible GTK theme package:
+
+```bash
+omarchy-pkg-add adw-gtk-theme
+```
+
+You can also install it from the Omarchy menu with `Super + Alt + Space`:
+
+```text
+Install > Package > adw-gtk-theme
+```
+
+The `thpm` installer checks for `adw-gtk-theme` and can prompt to install it if it is missing.
+
 ## Requirements
 
 - Omarchy
 - An Omarchy 3.3+ theme with `colors.toml`
+- `adw-gtk-theme` for GTK app theming
 - The apps you want to theme installed on your system
 
 Some apps need a one-time theme selection inside their own settings. See [Troubleshooting](#troubleshooting) for common cases.
