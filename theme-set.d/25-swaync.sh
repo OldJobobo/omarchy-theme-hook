@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Intended live destination:
 # ~/.config/omarchy/hooks/theme-set.d/25-swaync.sh

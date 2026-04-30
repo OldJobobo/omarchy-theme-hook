@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Typora theme hook - generates CSS with current omarchy theme colors
 

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 output_file="$HOME/.config/omarchy/current/theme/gtk.css"
 light_file="$HOME/.config/omarchy/current/theme/light.mode"

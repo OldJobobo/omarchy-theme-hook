@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Omarchy 3.3+ uses colors.toml as the source of truth for theme colors.
 # Previously we read from alacritty.toml, but that file is now generated

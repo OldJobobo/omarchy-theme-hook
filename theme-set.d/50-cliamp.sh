@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 if ! command -v cliamp >/dev/null 2>&1; then
     skipped "cliamp"

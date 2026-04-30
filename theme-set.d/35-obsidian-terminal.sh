@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Update Obsidian terminal plugin xterm.js theme colors on Omarchy theme switch.
 # Reads color vars exported by the parent theme-set hook (no # prefix).
 

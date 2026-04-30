@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 new_zed_file="$HOME/.config/omarchy/current/theme/zed.json"
 

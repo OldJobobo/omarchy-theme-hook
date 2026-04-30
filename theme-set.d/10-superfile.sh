@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 output_file="$HOME/.config/omarchy/current/theme/superfile.toml"
 

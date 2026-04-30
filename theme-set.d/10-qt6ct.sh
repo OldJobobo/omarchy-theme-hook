@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 new_qt_file="$HOME/.config/omarchy/current/theme/qt6ct.conf"
 

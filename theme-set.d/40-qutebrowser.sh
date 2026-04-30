@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 if ! command -v qutebrowser >/dev/null 2>&1; then
     skipped "Qutebrowser"

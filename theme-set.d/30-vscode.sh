@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 output_file="$HOME/.config/omarchy/current/theme/vscode_colors.json"
 
 if ! command -v code >/dev/null 2>&1; then
