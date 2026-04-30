@@ -824,6 +824,35 @@ test_tmux_plugin_skips_without_theme_conf() {
   assert_file_missing "$target_file" "tmux plugin skips when theme has no tmux.conf"
 }
 
+test_tmux_plugin_removes_managed_theme_when_theme_conf_missing() {
+  local home_dir="$TMP_ROOT/tmux-cleanup-home"
+  local bin_dir="$TMP_ROOT/tmux-cleanup-bin"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local target_file="$home_dir/.config/tmux/omarchy-theme.conf"
+  local config_file="$home_dir/.config/tmux/tmux.conf"
+  local tmux_log="$TMP_ROOT/tmux-cleanup.log"
+
+  write_colors_fixture "$home_dir"
+  mkdir -p "$hook_dir" "$bin_dir" "$(dirname "$config_file")"
+  cp "$ROOT_DIR/theme-set.d/10-tmux.sh" "$hook_dir/10-tmux.sh"
+  chmod +x "$hook_dir/10-tmux.sh"
+  printf 'set -g status-style "bg=#000000"\n' > "$target_file"
+  printf 'set -g mouse on\n\nsource-file ~/.config/tmux/omarchy-theme.conf\n' > "$config_file"
+  cat > "$bin_dir/tmux" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$tmux_log"
+EOF
+  chmod +x "$bin_dir/tmux"
+  make_stub_bin "$bin_dir" pgrep 'exit 1'
+  make_stub_bin "$bin_dir" notify-send 'exit 0'
+
+  PATH="$bin_dir:$PATH" HOME="$home_dir" "$ROOT_DIR/theme-set" >/dev/null
+
+  assert_file_missing "$target_file" "tmux plugin removes stale managed theme file"
+  assert_not_contains "$(cat "$config_file")" "source-file ~/.config/tmux/omarchy-theme.conf" "tmux plugin removes managed source line"
+  assert_contains "$(cat "$tmux_log")" "source-file $config_file" "tmux plugin reloads base config after cleanup"
+}
+
 test_tmux_plugin_installs_theme_and_reloads() {
   local home_dir="$TMP_ROOT/tmux-home"
   local bin_dir="$TMP_ROOT/tmux-bin"
@@ -1209,6 +1238,7 @@ main() {
   test_swaync_plugin_installs_theme_files_and_reloads
   test_swaync_plugin_prefers_named_theme_over_current_theme
   test_tmux_plugin_skips_without_theme_conf
+  test_tmux_plugin_removes_managed_theme_when_theme_conf_missing
   test_tmux_plugin_installs_theme_and_reloads
   test_tmux_plugin_prefers_existing_legacy_config
   test_vscode_plugin_skips_when_theme_provides_vscode_json
