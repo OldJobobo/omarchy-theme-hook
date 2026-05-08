@@ -38,10 +38,12 @@ git clone --branch thpm --depth 1 https://github.com/OldJobobo/theme-hook-plugin
 # Remove legacy aliases from previous installs
 rm -f $HOME/.local/share/omarchy/bin/theme-hook-update > /dev/null 2>&1
 rm -f $HOME/.local/share/omarchy/bin/thctl > /dev/null 2>&1
+rm -f $HOME/.local/share/omarchy/bin/thpm > /dev/null 2>&1
 
 # Install the thpm CLI
-mv -f /tmp/theme-hook/thpm $HOME/.local/share/omarchy/bin/thpm
-chmod +x $HOME/.local/share/omarchy/bin/thpm
+mkdir -p $HOME/.local/bin
+mv -f /tmp/theme-hook/thpm $HOME/.local/bin/thpm
+chmod +x $HOME/.local/bin/thpm
 
 # Copy theme-set hook to Omarchy hooks directory
 mv -f /tmp/theme-hook/theme-set $HOME/.config/omarchy/hooks/

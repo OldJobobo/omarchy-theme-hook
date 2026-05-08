@@ -7,6 +7,7 @@ omarchy-show-logo
 echo "Uninstalling thpm.."
 
 rm -rf /tmp/theme-hook/
+rm -f $HOME/.local/bin/thpm
 rm -f $HOME/.local/share/omarchy/bin/thpm
 rm -f $HOME/.local/share/omarchy/bin/thctl
 rm -rf $HOME/.config/omarchy/hooks/theme-set.d/

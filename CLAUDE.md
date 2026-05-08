@@ -29,7 +29,7 @@ omarchy-hook theme-set                      ← Omarchy fires this on theme chan
 ~/.config/omarchy/hooks/theme-set.d/*.sh    ← plugins (this repo's `theme-set.d/`)
 ```
 
-Plus the user-facing CLI `thpm` (this repo's `thpm` script), installed to `~/.local/share/omarchy/bin/thpm`.
+Plus the user-facing CLI `thpm` (this repo's `thpm` script), installed to `~/.local/bin/thpm`.
 
 **Source of theme colors:** `~/.config/omarchy/current/theme/colors.toml` (Omarchy 3.3+). The previous source `alacritty.toml` is gone — it's now a generated artifact and may contain unrendered Jinja-style placeholders. Always read from `colors.toml`.
 

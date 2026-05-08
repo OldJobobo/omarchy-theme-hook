@@ -1023,11 +1023,13 @@ test_install_preserves_disabled_plugins_and_installs_files() {
   local home_dir="$TMP_ROOT/install-home"
   local bin_dir="$TMP_ROOT/install-bin"
   local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
-  local installed_thpm="$home_dir/.local/share/omarchy/bin/thpm"
+  local installed_thpm="$home_dir/.local/bin/thpm"
+  local legacy_thpm="$home_dir/.local/share/omarchy/bin/thpm"
   local installed_theme_set="$home_dir/.config/omarchy/hooks/theme-set"
   local output
 
   mkdir -p "$hook_dir" "$bin_dir" "$home_dir/.local/share/omarchy/bin"
+  printf '#!/usr/bin/env bash\n' > "$legacy_thpm"
   printf '#!/usr/bin/env bash\n' > "$hook_dir/00-fish.sh"
   chmod -x "$hook_dir/00-fish.sh"
 
@@ -1042,6 +1044,7 @@ test_install_preserves_disabled_plugins_and_installs_files() {
   assert_contains "$output" "Downloading thpm.." "install announces download"
   assert_contains "$output" "omarchy-hook theme-set" "install applies theme-set hook"
   assert_file_executable "$installed_thpm" "install writes executable thpm"
+  assert_file_missing "$legacy_thpm" "install removes legacy omarchy bin thpm"
   assert_file_executable "$installed_theme_set" "install writes executable theme-set hook"
   assert_file_not_executable "$hook_dir/00-fish.sh" "install preserves disabled plugin permission"
   assert_file_executable "$hook_dir/30-vscode.sh" "install enables bundled plugins by default"
@@ -1053,7 +1056,7 @@ test_install_interactive_prompt_installs_missing_adw_theme() {
   local sudo_log="$TMP_ROOT/install-interactive-sudo.log"
   local output
 
-  mkdir -p "$bin_dir" "$home_dir/.local/share/omarchy/bin" "$home_dir/.config/omarchy/hooks"
+  mkdir -p "$bin_dir" "$home_dir/.config/omarchy/hooks"
   make_stub_bin "$bin_dir" pacman 'exit 1'
   cat > "$bin_dir/sudo" <<EOF
 #!/usr/bin/env bash
@@ -1069,7 +1072,7 @@ EOF
   assert_contains "$output" "\"adw-gtk-theme\" is required to theme GTK applications." "install interactive path explains missing GTK theme"
   assert_file_exists "$sudo_log" "install interactive path invokes sudo when confirmed"
   assert_eq "pacman -S adw-gtk-theme" "$(cat "$sudo_log")" "install interactive path installs adw-gtk-theme"
-  assert_file_executable "$home_dir/.local/share/omarchy/bin/thpm" "install interactive path still installs thpm"
+  assert_file_executable "$home_dir/.local/bin/thpm" "install interactive path still installs thpm"
 }
 
 test_install_gum_prompt_installs_missing_adw_theme() {
@@ -1078,7 +1081,7 @@ test_install_gum_prompt_installs_missing_adw_theme() {
   local sudo_log="$TMP_ROOT/install-gum-sudo.log"
   local gum_log="$TMP_ROOT/install-gum.log"
 
-  mkdir -p "$bin_dir" "$home_dir/.local/share/omarchy/bin" "$home_dir/.config/omarchy/hooks"
+  mkdir -p "$bin_dir" "$home_dir/.config/omarchy/hooks"
   make_stub_bin "$bin_dir" pacman 'exit 1'
   cat > "$bin_dir/gum" <<EOF
 #!/usr/bin/env bash
@@ -1108,7 +1111,8 @@ test_uninstall_removes_files_and_qutebrowser_theme() {
   local bin_dir="$TMP_ROOT/uninstall-bin"
   local output
 
-  mkdir -p "$bin_dir" "$home_dir/.local/share/omarchy/bin" "$home_dir/.config/omarchy/hooks/theme-set.d" "$home_dir/.config/qutebrowser/omarchy"
+  mkdir -p "$bin_dir" "$home_dir/.local/bin" "$home_dir/.local/share/omarchy/bin" "$home_dir/.config/omarchy/hooks/theme-set.d" "$home_dir/.config/qutebrowser/omarchy"
+  printf '#!/usr/bin/env bash\n' > "$home_dir/.local/bin/thpm"
   printf '#!/usr/bin/env bash\n' > "$home_dir/.local/share/omarchy/bin/thpm"
   printf '#!/usr/bin/env bash\n' > "$home_dir/.config/omarchy/hooks/theme-set"
   printf '#!/usr/bin/env bash\n' > "$home_dir/.config/omarchy/hooks/theme-set.d/10-fzf.sh"
@@ -1129,7 +1133,8 @@ EOF
   output="$(PATH="$bin_dir:$PATH" HOME="$home_dir" bash "$ROOT_DIR/uninstall.sh" 2>&1)"
 
   assert_contains "$output" "Uninstalled thpm!" "uninstall reports completion"
-  assert_file_missing "$home_dir/.local/share/omarchy/bin/thpm" "uninstall removes thpm binary"
+  assert_file_missing "$home_dir/.local/bin/thpm" "uninstall removes thpm binary"
+  assert_file_missing "$home_dir/.local/share/omarchy/bin/thpm" "uninstall removes legacy omarchy bin thpm"
   assert_file_missing "$home_dir/.config/omarchy/hooks/theme-set" "uninstall removes theme-set hook"
   assert_file_missing "$home_dir/.config/omarchy/hooks/theme-set.d" "uninstall removes plugin directory"
   assert_file_missing "$home_dir/.config/qutebrowser/omarchy" "uninstall removes qutebrowser theme directory"
