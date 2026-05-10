@@ -2,6 +2,8 @@
 
 set -e
 
+THPM_BRANCH="${THPM_BRANCH:-thpm}"
+
 # Install prerequisites
 if ! pacman -Qi "adw-gtk-theme" &>/dev/null; then
     if command -v gum >/dev/null 2>&1; then
@@ -46,7 +48,7 @@ fi
 
 # Clone the Theme Hook Plugin Manager repository
 echo -e "Downloading thpm.."
-git clone --branch thpm --depth 1 https://github.com/OldJobobo/theme-hook-plugin-manager.git /tmp/theme-hook > /dev/null 2>&1
+git clone --branch "$THPM_BRANCH" --depth 1 https://github.com/OldJobobo/theme-hook-plugin-manager.git /tmp/theme-hook > /dev/null 2>&1
 
 # Remove legacy aliases from previous installs
 rm -f $HOME/.local/share/omarchy/bin/theme-hook-update > /dev/null 2>&1
