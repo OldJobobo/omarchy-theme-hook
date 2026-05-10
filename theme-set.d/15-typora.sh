@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+source "${THPM_THEME_ENV:-$HOME/.local/share/thpm/lib/theme-env.sh}"
 
 # Typora theme hook - generates CSS with current omarchy theme colors
 

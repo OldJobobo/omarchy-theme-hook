@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+source "${THPM_THEME_ENV:-$HOME/.local/share/thpm/lib/theme-env.sh}"
 
 new_zed_file="$HOME/.config/omarchy/current/theme/zed.json"
 

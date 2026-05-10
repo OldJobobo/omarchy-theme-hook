@@ -2,6 +2,8 @@
 
 set -e
 
+THPM_BRANCH="${THPM_BRANCH:-thpm}"
+
 # Install prerequisites
 if ! pacman -Qi "adw-gtk-theme" &>/dev/null; then
     if command -v gum >/dev/null 2>&1; then
@@ -24,16 +26,29 @@ fi
 rm -rf /tmp/theme-hook/
 
 disabled_plugins=()
+record_disabled_plugin() {
+    local plugin="$1"
+    local name
+
+    name=$(basename "$plugin")
+    name=${name%.sample}
+    disabled_plugins+=("$name")
+}
+
 if [[ -d "$HOME/.config/omarchy/hooks/theme-set.d" ]]; then
     for plugin in "$HOME"/.config/omarchy/hooks/theme-set.d/*.sh; do
         [[ -f "$plugin" && ! -x "$plugin" ]] || continue
-        disabled_plugins+=("$(basename "$plugin")")
+        record_disabled_plugin "$plugin"
+    done
+    for plugin in "$HOME"/.config/omarchy/hooks/theme-set.d/*.sh.sample; do
+        [[ -f "$plugin" ]] || continue
+        record_disabled_plugin "$plugin"
     done
 fi
 
 # Clone the Theme Hook Plugin Manager repository
 echo -e "Downloading thpm.."
-git clone --branch thpm --depth 1 https://github.com/OldJobobo/theme-hook-plugin-manager.git /tmp/theme-hook > /dev/null 2>&1
+git clone --branch "$THPM_BRANCH" --depth 1 https://github.com/OldJobobo/theme-hook-plugin-manager.git /tmp/theme-hook > /dev/null 2>&1
 
 # Remove legacy aliases from previous installs
 rm -f $HOME/.local/share/omarchy/bin/theme-hook-update > /dev/null 2>&1
@@ -45,10 +60,17 @@ mkdir -p $HOME/.local/bin
 mv -f /tmp/theme-hook/thpm $HOME/.local/bin/thpm
 chmod +x $HOME/.local/bin/thpm
 
-# Copy theme-set hook to Omarchy hooks directory
-mv -f /tmp/theme-hook/theme-set $HOME/.config/omarchy/hooks/
+# Install shared thpm hook runtime
+mkdir -p $HOME/.local/share/thpm/lib
+mv -f /tmp/theme-hook/lib/theme-env.sh $HOME/.local/share/thpm/lib/theme-env.sh
 
-# Create theme hook directory and copy scripts
+# Remove the old thpm dispatcher if this install previously owned it. Omarchy
+# now runs theme-set.d hooks directly, so no dispatcher is needed.
+if [[ -f "$HOME/.config/omarchy/hooks/theme-set" ]] && grep -Eq 'Omarchy 3\.3\+ uses colors\.toml|Compatibility shim for older thpm installs' "$HOME/.config/omarchy/hooks/theme-set"; then
+    rm -f "$HOME/.config/omarchy/hooks/theme-set"
+fi
+
+# Create Omarchy theme hook directory and copy native hook scripts
 mkdir -p $HOME/.config/omarchy/hooks/theme-set.d/
 mv -f /tmp/theme-hook/theme-set.d/* $HOME/.config/omarchy/hooks/theme-set.d/
 
@@ -56,12 +78,12 @@ mv -f /tmp/theme-hook/theme-set.d/* $HOME/.config/omarchy/hooks/theme-set.d/
 rm -rf /tmp/theme-hook
 
 # Update permissions
-chmod +x $HOME/.config/omarchy/hooks/theme-set
-chmod +x $HOME/.config/omarchy/hooks/theme-set.d/*
+chmod 644 $HOME/.local/share/thpm/lib/theme-env.sh
+chmod 644 $HOME/.config/omarchy/hooks/theme-set.d/*
 
 for plugin in "${disabled_plugins[@]}"; do
     if [[ -f "$HOME/.config/omarchy/hooks/theme-set.d/$plugin" ]]; then
-        chmod -x "$HOME/.config/omarchy/hooks/theme-set.d/$plugin"
+        mv -f "$HOME/.config/omarchy/hooks/theme-set.d/$plugin" "$HOME/.config/omarchy/hooks/theme-set.d/$plugin.sample"
     fi
 done
 

@@ -150,7 +150,7 @@ Custom plugins live in:
 ~/.config/omarchy/hooks/theme-set.d/
 ```
 
-Run `thpm open` to open that folder. A plugin is enabled when its script is executable and disabled when it is not.
+Run `thpm open` to open that folder. `thpm` plugins are native Omarchy `theme-set.d` hooks: a plugin is enabled as `name.sh` and disabled as `name.sh.sample`, matching Omarchy's hook runner.
 
 For plugin authoring details, see [docs/plugins.md](docs/plugins.md).
 
@@ -200,6 +200,10 @@ thpm run
 #### I see a `colors.toml not found` error.
 
 Use an Omarchy 3.3-compatible theme. The theme must include a valid `colors.toml` file.
+
+#### I see `success: command not found` or `Hook failed` in Omarchy logs.
+
+Update `thpm`. Current plugins run directly as native Omarchy hooks and source `~/.local/share/thpm/lib/theme-env.sh` for theme colors and helpers. Older plugin copies expected a separate `thpm` dispatcher and can fail under Omarchy's current `.d` hook runner.
 
 ## Update
 

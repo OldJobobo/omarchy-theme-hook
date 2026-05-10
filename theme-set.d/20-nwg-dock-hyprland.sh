@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+source "${THPM_THEME_ENV:-$HOME/.local/share/thpm/lib/theme-env.sh}"
 
 # This script respects user's existing nwg-dock-hyprland configuration.
 # It searches ~/.config/hypr/*.conf for exec/exec-once commands and preserves user flags.

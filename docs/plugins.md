@@ -28,7 +28,7 @@ Lower numbers run earlier. Higher numbers run later.
 
 ## Enable and Disable
 
-A plugin is enabled when the file is executable. It is disabled when the file is not executable.
+Plugins use Omarchy's native hook convention. A plugin is enabled when it ends in `.sh`; it is disabled when it ends in `.sh.sample`.
 
 Use `thpm` for normal toggling:
 
@@ -39,7 +39,13 @@ thpm disable myapp
 
 ## Available Theme Values
 
-Plugins run with Omarchy theme colors exported as shell variables. Hex values do not include `#`.
+Plugins run directly as Omarchy `theme-set.d` hooks. Source the shared `thpm` theme environment before using theme colors or helpers:
+
+```bash
+source "${THPM_THEME_ENV:-$HOME/.local/share/thpm/lib/theme-env.sh}"
+```
+
+Hex values do not include `#`.
 
 Common values:
 
@@ -85,6 +91,7 @@ Use `skipped` for missing apps or optional files. Use `error` only when the plug
 
 ```bash
 #!/bin/bash
+source "${THPM_THEME_ENV:-$HOME/.local/share/thpm/lib/theme-env.sh}"
 
 if ! command -v myapp >/dev/null 2>&1; then
     skipped "myapp"
@@ -112,7 +119,6 @@ Save it as:
 Then enable it:
 
 ```bash
-chmod +x ~/.config/omarchy/hooks/theme-set.d/50-myapp.sh
 thpm run
 ```
 
