@@ -208,7 +208,7 @@ test_thpm_help() {
 
 test_thpm_enable_disable_and_list() {
   local home_dir="$TMP_ROOT/thpm-home"
-  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.plugins.d"
   local output
 
   mkdir -p "$hook_dir"
@@ -234,7 +234,7 @@ test_thpm_enable_disable_and_list() {
 test_thpm_aliases() {
   local home_dir="$TMP_ROOT/alias-home"
   local bin_dir="$TMP_ROOT/alias-bin"
-  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.plugins.d"
   local output
 
   mkdir -p "$hook_dir" "$bin_dir"
@@ -265,7 +265,7 @@ test_thpm_aliases() {
 test_thpm_open_uses_xdg_open_for_hook_dir() {
   local home_dir="$TMP_ROOT/open-home"
   local bin_dir="$TMP_ROOT/open-bin"
-  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.plugins.d"
   local open_log="$TMP_ROOT/xdg-open.log"
 
   mkdir -p "$hook_dir" "$bin_dir"
@@ -288,7 +288,7 @@ EOF
 test_thpm_gtk_post_enable_disable_updates_gsettings() {
   local home_dir="$TMP_ROOT/gtk-home"
   local bin_dir="$TMP_ROOT/gtk-bin"
-  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.plugins.d"
   local gsettings_log="$TMP_ROOT/gsettings.log"
 
   mkdir -p "$hook_dir" "$bin_dir" "$home_dir/.config/omarchy/current/theme"
@@ -311,7 +311,7 @@ EOF
 test_theme_set_exports_colors_and_runs_enabled_hooks() {
   local home_dir="$TMP_ROOT/theme-set-home"
   local bin_dir="$TMP_ROOT/bin"
-  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.plugins.d"
   local output_file="$TMP_ROOT/hook-output"
   local skipped_file="$TMP_ROOT/skipped-output"
 
@@ -371,7 +371,7 @@ test_theme_set_errors_without_colors_file() {
 
 test_theme_set_reports_hook_failure() {
   local home_dir="$TMP_ROOT/failing-hook-home"
-  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.plugins.d"
   local output
   local status
 
@@ -395,7 +395,7 @@ EOF
 test_theme_set_sends_restart_notification() {
   local home_dir="$TMP_ROOT/restart-home"
   local bin_dir="$TMP_ROOT/restart-bin"
-  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.plugins.d"
   local notify_log="$TMP_ROOT/notify.log"
 
   write_colors_fixture "$home_dir"
@@ -423,7 +423,7 @@ EOF
 test_qutebrowser_plugin_writes_theme_and_config() {
   local home_dir="$TMP_ROOT/qutebrowser-home"
   local bin_dir="$TMP_ROOT/qutebrowser-bin"
-  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.plugins.d"
   local draw_file="$home_dir/.config/qutebrowser/omarchy/draw.py"
   local config_file="$home_dir/.config/qutebrowser/config.py"
 
@@ -448,7 +448,7 @@ test_qutebrowser_plugin_writes_theme_and_config() {
 test_qutebrowser_light_mode_change_requires_restart() {
   local home_dir="$TMP_ROOT/qutebrowser-light-home"
   local bin_dir="$TMP_ROOT/qutebrowser-light-bin"
-  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.plugins.d"
   local draw_file="$home_dir/.config/qutebrowser/omarchy/draw.py"
   local notify_log="$TMP_ROOT/qutebrowser-light-notify.log"
 
@@ -479,7 +479,7 @@ EOF
 test_fzf_plugin_writes_fish_theme() {
   local home_dir="$TMP_ROOT/fzf-home"
   local bin_dir="$TMP_ROOT/fzf-bin"
-  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.plugins.d"
   local output_file="$home_dir/.config/omarchy/current/theme/fzf.fish"
 
   write_colors_fixture "$home_dir"
@@ -501,7 +501,7 @@ test_fzf_plugin_writes_fish_theme() {
 test_fish_plugin_writes_shell_colors() {
   local home_dir="$TMP_ROOT/fish-home"
   local bin_dir="$TMP_ROOT/fish-bin"
-  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.plugins.d"
   local output_file="$home_dir/.config/omarchy/current/theme/colors.fish"
 
   write_colors_fixture "$home_dir"
@@ -522,7 +522,7 @@ test_fish_plugin_writes_shell_colors() {
 
 test_obsidian_terminal_plugin_discovers_registered_vault() {
   local home_dir="$TMP_ROOT/obsidian-home"
-  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.plugins.d"
   local vault_dir="$home_dir/Notes/Team Vault"
   local data_file="$vault_dir/.obsidian/plugins/terminal/data.json"
 
@@ -576,7 +576,7 @@ EOF
 
 test_foot_plugin_respects_disable_flag() {
   local home_dir="$TMP_ROOT/foot-disabled-home"
-  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.plugins.d"
   local log_file="/tmp/foot-theme-hook.log"
 
   rm -f "$log_file"
@@ -593,7 +593,7 @@ test_foot_plugin_respects_disable_flag() {
 
 test_foot_plugin_logs_missing_theme_file() {
   local home_dir="$TMP_ROOT/foot-missing-home"
-  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.plugins.d"
   local log_file="/tmp/foot-theme-hook.log"
 
   rm -f "$log_file"
@@ -611,7 +611,7 @@ test_foot_plugin_logs_missing_theme_file() {
 test_foot_plugin_reads_theme_and_logs_no_ttys() {
   local home_dir="$TMP_ROOT/foot-theme-home"
   local bin_dir="$TMP_ROOT/foot-bin"
-  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.plugins.d"
   local foot_file="$home_dir/.config/omarchy/current/theme/foot.ini"
   local base_file="$home_dir/.config/foot/foot.ini"
   local log_file="/tmp/foot-theme-hook.log"
@@ -646,7 +646,7 @@ EOF
 test_foot_plugin_writes_osc_sequences_to_tty() {
   local home_dir="$TMP_ROOT/foot-tty-home"
   local bin_dir="$TMP_ROOT/foot-tty-bin"
-  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.plugins.d"
   local foot_file="$home_dir/.config/omarchy/current/theme/foot.ini"
   local wrapper="$TMP_ROOT/foot-tty-wrapper.sh"
   local output
@@ -710,7 +710,7 @@ EOF
 test_cava_plugin_writes_theme_and_updates_config() {
   local home_dir="$TMP_ROOT/cava-home"
   local bin_dir="$TMP_ROOT/cava-bin"
-  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.plugins.d"
   local theme_file="$home_dir/.config/cava/themes/omarchy"
   local config_file="$home_dir/.config/cava/config"
   local pkill_log="$TMP_ROOT/pkill.log"
@@ -748,7 +748,7 @@ EOF
 test_cava_plugin_does_not_duplicate_theme_setting() {
   local home_dir="$TMP_ROOT/cava-existing-home"
   local bin_dir="$TMP_ROOT/cava-existing-bin"
-  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.plugins.d"
   local config_file="$home_dir/.config/cava/config"
   local theme_count
 
@@ -774,7 +774,7 @@ EOF
 test_superfile_plugin_writes_theme_and_requests_restart() {
   local home_dir="$TMP_ROOT/superfile-home"
   local bin_dir="$TMP_ROOT/superfile-bin"
-  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.plugins.d"
   local theme_file="$home_dir/.config/superfile/theme/omarchy.toml"
   local notify_log="$TMP_ROOT/superfile-notify.log"
 
@@ -802,7 +802,7 @@ EOF
 test_swaync_plugin_installs_theme_files_and_reloads() {
   local home_dir="$TMP_ROOT/swaync-home"
   local bin_dir="$TMP_ROOT/swaync-bin"
-  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.plugins.d"
   local source_dir="$home_dir/.config/omarchy/current/theme"
   local target_dir="$home_dir/.config/swaync"
   local reload_log="$TMP_ROOT/swaync-reload.log"
@@ -834,7 +834,7 @@ EOF
 test_swaync_plugin_prefers_named_theme_over_current_theme() {
   local home_dir="$TMP_ROOT/swaync-named-home"
   local bin_dir="$TMP_ROOT/swaync-named-bin"
-  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.plugins.d"
   local current_dir="$home_dir/.config/omarchy/current/theme"
   local named_dir="$home_dir/.config/omarchy/themes/named-theme"
   local target_dir="$home_dir/.config/swaync"
@@ -862,7 +862,7 @@ test_swaync_plugin_prefers_named_theme_over_current_theme() {
 test_tmux_plugin_skips_without_theme_conf() {
   local home_dir="$TMP_ROOT/tmux-skip-home"
   local bin_dir="$TMP_ROOT/tmux-skip-bin"
-  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.plugins.d"
   local target_file="$home_dir/.config/tmux/omarchy-theme.conf"
 
   write_colors_fixture "$home_dir"
@@ -881,7 +881,7 @@ test_tmux_plugin_skips_without_theme_conf() {
 test_tmux_plugin_removes_managed_theme_when_theme_conf_missing() {
   local home_dir="$TMP_ROOT/tmux-cleanup-home"
   local bin_dir="$TMP_ROOT/tmux-cleanup-bin"
-  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.plugins.d"
   local target_file="$home_dir/.config/tmux/omarchy-theme.conf"
   local config_file="$home_dir/.config/tmux/tmux.conf"
   local tmux_log="$TMP_ROOT/tmux-cleanup.log"
@@ -910,7 +910,7 @@ EOF
 test_tmux_plugin_installs_theme_and_reloads() {
   local home_dir="$TMP_ROOT/tmux-home"
   local bin_dir="$TMP_ROOT/tmux-bin"
-  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.plugins.d"
   local theme_file="$home_dir/.config/omarchy/current/theme/tmux.conf"
   local target_file="$home_dir/.config/tmux/omarchy-theme.conf"
   local config_file="$home_dir/.config/tmux/tmux.conf"
@@ -945,7 +945,7 @@ EOF
 test_tmux_plugin_prefers_existing_legacy_config() {
   local home_dir="$TMP_ROOT/tmux-legacy-home"
   local bin_dir="$TMP_ROOT/tmux-legacy-bin"
-  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.plugins.d"
   local theme_file="$home_dir/.config/omarchy/current/theme/tmux.conf"
   local legacy_config="$home_dir/.tmux.conf"
   local xdg_config="$home_dir/.config/tmux/tmux.conf"
@@ -969,7 +969,7 @@ test_tmux_plugin_prefers_existing_legacy_config() {
 test_vscode_plugin_skips_when_theme_provides_vscode_json() {
   local home_dir="$TMP_ROOT/vscode-skip-home"
   local bin_dir="$TMP_ROOT/vscode-skip-bin"
-  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.plugins.d"
   local generated_file="$home_dir/.config/omarchy/current/theme/vscode_colors.json"
 
   write_colors_fixture "$home_dir"
@@ -989,7 +989,7 @@ test_vscode_plugin_skips_when_theme_provides_vscode_json() {
 test_vscode_plugin_patches_extension_manifest_and_installs_theme() {
   local home_dir="$TMP_ROOT/vscode-full-home"
   local bin_dir="$TMP_ROOT/vscode-full-bin"
-  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.plugins.d"
   local extension_dir="$home_dir/.vscode/extensions/tintedtheming.base16-tinted-themes-1.0.0"
   local theme_file="$extension_dir/themes/base16/omarchy.json"
   local package_file="$extension_dir/package.json"
@@ -1031,7 +1031,7 @@ EOF
 
 test_theme_set_extracts_colors_with_leading_whitespace_and_comments() {
   local home_dir="$TMP_ROOT/spaced-colors-home"
-  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.plugins.d"
   local output_file="$TMP_ROOT/spaced-colors-output"
   local theme_dir="$home_dir/.config/omarchy/current/theme"
 
@@ -1076,16 +1076,17 @@ EOF
 test_install_preserves_disabled_plugins_and_installs_files() {
   local home_dir="$TMP_ROOT/install-home"
   local bin_dir="$TMP_ROOT/install-bin"
-  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.plugins.d"
+  local legacy_hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
   local installed_thpm="$home_dir/.local/bin/thpm"
   local legacy_thpm="$home_dir/.local/share/omarchy/bin/thpm"
   local installed_theme_set="$home_dir/.config/omarchy/hooks/theme-set"
   local output
 
-  mkdir -p "$hook_dir" "$bin_dir" "$home_dir/.local/share/omarchy/bin"
+  mkdir -p "$legacy_hook_dir" "$bin_dir" "$home_dir/.local/share/omarchy/bin"
   printf '#!/usr/bin/env bash\n' > "$legacy_thpm"
-  printf '#!/usr/bin/env bash\n' > "$hook_dir/00-fish.sh"
-  chmod -x "$hook_dir/00-fish.sh"
+  printf '#!/usr/bin/env bash\n' > "$legacy_hook_dir/00-fish.sh"
+  chmod -x "$legacy_hook_dir/00-fish.sh"
 
   make_stub_bin "$bin_dir" pacman 'exit 0'
   make_stub_bin "$bin_dir" sudo 'printf "sudo should not be called\n" >&2; exit 1'
@@ -1102,6 +1103,7 @@ test_install_preserves_disabled_plugins_and_installs_files() {
   assert_file_executable "$installed_theme_set" "install writes executable theme-set hook"
   assert_file_not_executable "$hook_dir/00-fish.sh" "install preserves disabled plugin permission"
   assert_file_executable "$hook_dir/30-vscode.sh" "install enables bundled plugins by default"
+  assert_file_missing "$legacy_hook_dir/00-fish.sh" "install migrates legacy plugin files out of Omarchy auto-run directory"
 }
 
 test_install_interactive_prompt_installs_missing_adw_theme() {
@@ -1165,11 +1167,12 @@ test_uninstall_removes_files_and_qutebrowser_theme() {
   local bin_dir="$TMP_ROOT/uninstall-bin"
   local output
 
-  mkdir -p "$bin_dir" "$home_dir/.local/bin" "$home_dir/.local/share/omarchy/bin" "$home_dir/.config/omarchy/hooks/theme-set.d" "$home_dir/.config/qutebrowser/omarchy"
+  mkdir -p "$bin_dir" "$home_dir/.local/bin" "$home_dir/.local/share/omarchy/bin" "$home_dir/.config/omarchy/hooks/theme-set.d" "$home_dir/.config/omarchy/hooks/theme-set.plugins.d" "$home_dir/.config/qutebrowser/omarchy"
   printf '#!/usr/bin/env bash\n' > "$home_dir/.local/bin/thpm"
   printf '#!/usr/bin/env bash\n' > "$home_dir/.local/share/omarchy/bin/thpm"
   printf '#!/usr/bin/env bash\n' > "$home_dir/.config/omarchy/hooks/theme-set"
   printf '#!/usr/bin/env bash\n' > "$home_dir/.config/omarchy/hooks/theme-set.d/10-fzf.sh"
+  printf '#!/usr/bin/env bash\n' > "$home_dir/.config/omarchy/hooks/theme-set.plugins.d/20-fish.sh"
   cat > "$home_dir/.config/qutebrowser/config.py" <<'EOF'
 config.load_autoconfig()
 import omarchy.draw
@@ -1190,7 +1193,8 @@ EOF
   assert_file_missing "$home_dir/.local/bin/thpm" "uninstall removes thpm binary"
   assert_file_missing "$home_dir/.local/share/omarchy/bin/thpm" "uninstall removes legacy omarchy bin thpm"
   assert_file_missing "$home_dir/.config/omarchy/hooks/theme-set" "uninstall removes theme-set hook"
-  assert_file_missing "$home_dir/.config/omarchy/hooks/theme-set.d" "uninstall removes plugin directory"
+  assert_file_missing "$home_dir/.config/omarchy/hooks/theme-set.d" "uninstall removes legacy plugin directory"
+  assert_file_missing "$home_dir/.config/omarchy/hooks/theme-set.plugins.d" "uninstall removes managed plugin directory"
   assert_file_missing "$home_dir/.config/qutebrowser/omarchy" "uninstall removes qutebrowser theme directory"
   assert_eq "config.load_autoconfig()" "$(cat "$home_dir/.config/qutebrowser/config.py")" "uninstall removes qutebrowser config lines"
 }

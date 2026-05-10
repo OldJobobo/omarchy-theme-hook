@@ -11,6 +11,7 @@ rm -f $HOME/.local/bin/thpm
 rm -f $HOME/.local/share/omarchy/bin/thpm
 rm -f $HOME/.local/share/omarchy/bin/thctl
 rm -rf $HOME/.config/omarchy/hooks/theme-set.d/
+rm -rf $HOME/.config/omarchy/hooks/theme-set.plugins.d/
 rm -rf $HOME/.config/omarchy/hooks/theme-set
 
 echo "Attempting to revert applied themes.."

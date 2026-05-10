@@ -9,7 +9,7 @@ User setup and normal commands live in the main [README](../README.md).
 Installed plugins live in:
 
 ```text
-~/.config/omarchy/hooks/theme-set.d/
+~/.config/omarchy/hooks/theme-set.plugins.d/
 ```
 
 Bundled plugin source lives in this repository under:
@@ -106,13 +106,13 @@ success "myapp theme updated!"
 Save it as:
 
 ```text
-~/.config/omarchy/hooks/theme-set.d/50-myapp.sh
+~/.config/omarchy/hooks/theme-set.plugins.d/50-myapp.sh
 ```
 
 Then enable it:
 
 ```bash
-chmod +x ~/.config/omarchy/hooks/theme-set.d/50-myapp.sh
+chmod +x ~/.config/omarchy/hooks/theme-set.plugins.d/50-myapp.sh
 thpm run
 ```
 

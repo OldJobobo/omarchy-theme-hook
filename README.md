@@ -147,10 +147,12 @@ Theme Hook Plugin Manager builds on the original [omarchy-theme-hook](https://gi
 Custom plugins live in:
 
 ```text
-~/.config/omarchy/hooks/theme-set.d/
+~/.config/omarchy/hooks/theme-set.plugins.d/
 ```
 
 Run `thpm open` to open that folder. A plugin is enabled when its script is executable and disabled when it is not.
+
+`thpm` keeps managed plugins out of Omarchy's `theme-set.d` auto-run directory so Omarchy 3.8+ does not execute them a second time without the helper functions exported by `theme-set`.
 
 For plugin authoring details, see [docs/plugins.md](docs/plugins.md).
 
