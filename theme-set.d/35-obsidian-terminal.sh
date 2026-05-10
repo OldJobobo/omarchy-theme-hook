@@ -2,6 +2,13 @@
 # Update Obsidian Terminal plugin xterm.js theme colors on Omarchy theme switch.
 # Reads color vars exported by the parent theme-set hook (no # prefix).
 
+if [[ -z "${primary_background:-}" || -z "${primary_foreground:-}" ]]; then
+    if declare -F skipped >/dev/null 2>&1; then
+        skipped "Obsidian Terminal plugin theme colors"
+    fi
+    exit 0
+fi
+
 mapfile -d '' DATA_JSON_FILES < <(python3 <<'PYEOF'
 import json
 import os

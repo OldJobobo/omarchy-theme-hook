@@ -554,6 +554,26 @@ EOF
   assert_eq "14" "$(jq -r '.terminalOptions.fontSize' "$data_file")" "obsidian terminal plugin preserves existing settings"
 }
 
+test_obsidian_terminal_plugin_direct_run_does_not_clear_theme() {
+  local home_dir="$TMP_ROOT/obsidian-direct-home"
+  local data_file="$home_dir/Documents/Vault/.obsidian/plugins/terminal/data.json"
+
+  mkdir -p "$(dirname "$data_file")"
+  cat > "$data_file" <<'EOF'
+{
+  "terminalOptions": {
+    "theme": {
+      "background": "#010203"
+    }
+  }
+}
+EOF
+
+  HOME="$home_dir" "$ROOT_DIR/theme-set.d/35-obsidian-terminal.sh" >/dev/null
+
+  assert_eq "#010203" "$(jq -r '.terminalOptions.theme.background' "$data_file")" "obsidian terminal plugin direct run preserves existing theme"
+}
+
 test_foot_plugin_respects_disable_flag() {
   local home_dir="$TMP_ROOT/foot-disabled-home"
   local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
@@ -1269,6 +1289,7 @@ main() {
   test_fzf_plugin_writes_fish_theme
   test_fish_plugin_writes_shell_colors
   test_obsidian_terminal_plugin_discovers_registered_vault
+  test_obsidian_terminal_plugin_direct_run_does_not_clear_theme
   test_foot_plugin_respects_disable_flag
   test_foot_plugin_logs_missing_theme_file
   test_foot_plugin_reads_theme_and_logs_no_ttys
