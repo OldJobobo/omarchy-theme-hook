@@ -1,17 +1,87 @@
 #!/usr/bin/env bash
-# Update Obsidian terminal plugin xterm.js theme colors on Omarchy theme switch.
+# Update Obsidian Terminal plugin xterm.js theme colors on Omarchy theme switch.
 # Reads color vars exported by the parent theme-set hook (no # prefix).
 
-DATA_JSON="$HOME/Documents/My Vault/.obsidian/plugins/terminal/data.json"
+mapfile -d '' DATA_JSON_FILES < <(python3 <<'PYEOF'
+import json
+import os
+from pathlib import Path
 
-[[ -f "$DATA_JSON" ]] || skipped "Obsidian terminal plugin data.json"
+home = Path(os.environ.get("HOME", str(Path.home()))).expanduser()
+seen = set()
+matches = []
 
-python3 - "$DATA_JSON" <<PYEOF
+def add(path):
+    path = Path(path).expanduser()
+    try:
+        resolved = path.resolve()
+    except OSError:
+        resolved = path
+    key = str(resolved)
+    if key in seen:
+        return
+    seen.add(key)
+    if path.is_file():
+        matches.append(path)
+
+def add_vault(vault):
+    add(Path(vault) / ".obsidian" / "plugins" / "terminal" / "data.json")
+
+for value in (
+    os.environ.get("OBSIDIAN_TERMINAL_DATA_JSON", ""),
+    os.environ.get("OBSIDIAN_TERMINAL_DATA", ""),
+):
+    for item in value.split(":"):
+        if item:
+            add(item)
+
+for value in (
+    os.environ.get("OBSIDIAN_VAULT_PATH", ""),
+    os.environ.get("OBSIDIAN_VAULT", ""),
+):
+    for item in value.split(":"):
+        if item:
+            add_vault(item)
+
+config_home = Path(os.environ.get("XDG_CONFIG_HOME", home / ".config"))
+config_files = [
+    config_home / "obsidian" / "obsidian.json",
+    home / ".config" / "obsidian" / "obsidian.json",
+]
+
+for config_file in config_files:
+    if not config_file.is_file():
+        continue
+    try:
+        data = json.loads(config_file.read_text())
+    except (OSError, json.JSONDecodeError):
+        continue
+    for vault in data.get("vaults", {}).values():
+        path = vault.get("path") if isinstance(vault, dict) else None
+        if path:
+            add_vault(path)
+
+for root in (
+    home / "Documents",
+    home / "Desktop",
+    home / "Projects",
+    home / "Notes",
+    home / "Vaults",
+):
+    if not root.is_dir():
+        continue
+    for plugin_data in root.glob("*/.obsidian/plugins/terminal/data.json"):
+        add(plugin_data)
+
+for path in matches:
+    print(path, end="\0")
+PYEOF
+)
+
+[[ ${#DATA_JSON_FILES[@]} -gt 0 ]] || skipped "Obsidian Terminal plugin data.json"
+
+python3 - "${DATA_JSON_FILES[@]}" <<PYEOF
 import json, sys
-
-path = sys.argv[1]
-with open(path) as f:
-    data = json.load(f)
 
 import os
 def c(var):
@@ -46,10 +116,14 @@ theme = {
 # Drop any keys that failed to resolve
 theme = {k: v for k, v in theme.items() if v and v != "#"}
 
-data.setdefault("terminalOptions", {})["theme"] = theme
+for path in sys.argv[1:]:
+    with open(path) as f:
+        data = json.load(f)
 
-with open(path, "w") as f:
-    json.dump(data, f, indent=2)
+    data.setdefault("terminalOptions", {})["theme"] = theme
+
+    with open(path, "w") as f:
+        json.dump(data, f, indent=2)
 PYEOF
 
-success "Obsidian terminal plugin colors updated"
+success "Obsidian Terminal plugin colors updated (${#DATA_JSON_FILES[@]})"

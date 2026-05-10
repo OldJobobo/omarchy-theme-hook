@@ -174,6 +174,15 @@ Open `about:config`, set `toolkit.legacyUserProfileCustomizations.stylesheets` t
 
 Use a client with Vencord-compatible themes, such as Vesktop or Equibop. After applying an Omarchy theme, enable the Omarchy theme in your Discord client's theme settings.
 
+#### Obsidian Terminal plugin is not changing theme.
+
+The hook reads Obsidian's vault registry and also checks common vault folders under your home directory. For unusual setups, set one of these before running `thpm run`:
+
+```bash
+OBSIDIAN_VAULT_PATH="$HOME/path/to/vault" thpm run
+OBSIDIAN_TERMINAL_DATA_JSON="$HOME/path/to/vault/.obsidian/plugins/terminal/data.json" thpm run
+```
+
 #### Spotify is not changing theme.
 
 Make sure Spicetify is installed and working. If Spotify stopped theming after an update, run:

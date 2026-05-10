@@ -520,6 +520,40 @@ test_fish_plugin_writes_shell_colors() {
   assert_contains "$(cat "$output_file")" "set -U color15 '#ffffff'" "fish plugin writes bright white"
 }
 
+test_obsidian_terminal_plugin_discovers_registered_vault() {
+  local home_dir="$TMP_ROOT/obsidian-home"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local vault_dir="$home_dir/Notes/Team Vault"
+  local data_file="$vault_dir/.obsidian/plugins/terminal/data.json"
+
+  write_colors_fixture "$home_dir"
+  mkdir -p "$hook_dir" "$(dirname "$data_file")" "$home_dir/.config/obsidian"
+  cp "$ROOT_DIR/theme-set.d/35-obsidian-terminal.sh" "$hook_dir/35-obsidian-terminal.sh"
+  chmod +x "$hook_dir/35-obsidian-terminal.sh"
+  cat > "$home_dir/.config/obsidian/obsidian.json" <<EOF
+{
+  "vaults": {
+    "team": {
+      "path": "$vault_dir"
+    }
+  }
+}
+EOF
+  cat > "$data_file" <<'EOF'
+{
+  "terminalOptions": {
+    "fontSize": 14
+  }
+}
+EOF
+
+  XDG_CONFIG_HOME="$home_dir/.config" HOME="$home_dir" "$ROOT_DIR/theme-set" >/dev/null
+
+  assert_eq "#101112" "$(jq -r '.terminalOptions.theme.background' "$data_file")" "obsidian terminal plugin uses registered vault path"
+  assert_eq "#f1f2f3" "$(jq -r '.terminalOptions.theme.foreground' "$data_file")" "obsidian terminal plugin writes foreground"
+  assert_eq "14" "$(jq -r '.terminalOptions.fontSize' "$data_file")" "obsidian terminal plugin preserves existing settings"
+}
+
 test_foot_plugin_respects_disable_flag() {
   local home_dir="$TMP_ROOT/foot-disabled-home"
   local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
@@ -1196,6 +1230,7 @@ print_coverage_summary() {
     "$ROOT_DIR/theme-set.d/10-tmux.sh"
     "$ROOT_DIR/theme-set.d/25-swaync.sh"
     "$ROOT_DIR/theme-set.d/26-foot-live-colors.sh"
+    "$ROOT_DIR/theme-set.d/35-obsidian-terminal.sh"
     "$ROOT_DIR/theme-set.d/30-vscode.sh"
     "$ROOT_DIR/theme-set.d/40-cava.sh"
     "$ROOT_DIR/theme-set.d/40-qutebrowser.sh"
@@ -1233,6 +1268,7 @@ main() {
   test_qutebrowser_light_mode_change_requires_restart
   test_fzf_plugin_writes_fish_theme
   test_fish_plugin_writes_shell_colors
+  test_obsidian_terminal_plugin_discovers_registered_vault
   test_foot_plugin_respects_disable_flag
   test_foot_plugin_logs_missing_theme_file
   test_foot_plugin_reads_theme_and_logs_no_ttys
