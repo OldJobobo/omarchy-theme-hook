@@ -2,7 +2,7 @@
 
 set -e
 
-THPM_BRANCH="${THPM_BRANCH:-native-omarchy-hooks-pivot}"
+THPM_BRANCH="${THPM_BRANCH:-thpm}"
 
 # Install prerequisites
 if ! pacman -Qi "adw-gtk-theme" &>/dev/null; then
