@@ -24,10 +24,23 @@ fi
 rm -rf /tmp/theme-hook/
 
 disabled_plugins=()
+record_disabled_plugin() {
+    local plugin="$1"
+    local name
+
+    name=$(basename "$plugin")
+    name=${name%.sample}
+    disabled_plugins+=("$name")
+}
+
 if [[ -d "$HOME/.config/omarchy/hooks/theme-set.d" ]]; then
     for plugin in "$HOME"/.config/omarchy/hooks/theme-set.d/*.sh; do
         [[ -f "$plugin" && ! -x "$plugin" ]] || continue
-        disabled_plugins+=("$(basename "$plugin")")
+        record_disabled_plugin "$plugin"
+    done
+    for plugin in "$HOME"/.config/omarchy/hooks/theme-set.d/*.sh.sample; do
+        [[ -f "$plugin" ]] || continue
+        record_disabled_plugin "$plugin"
     done
 fi
 
@@ -45,10 +58,17 @@ mkdir -p $HOME/.local/bin
 mv -f /tmp/theme-hook/thpm $HOME/.local/bin/thpm
 chmod +x $HOME/.local/bin/thpm
 
-# Copy theme-set hook to Omarchy hooks directory
-mv -f /tmp/theme-hook/theme-set $HOME/.config/omarchy/hooks/
+# Install shared thpm hook runtime
+mkdir -p $HOME/.local/share/thpm/lib
+mv -f /tmp/theme-hook/lib/theme-env.sh $HOME/.local/share/thpm/lib/theme-env.sh
 
-# Create theme hook directory and copy scripts
+# Remove the old thpm dispatcher if this install previously owned it. Omarchy
+# now runs theme-set.d hooks directly, so no dispatcher is needed.
+if [[ -f "$HOME/.config/omarchy/hooks/theme-set" ]] && grep -Eq 'Omarchy 3\.3\+ uses colors\.toml|Compatibility shim for older thpm installs' "$HOME/.config/omarchy/hooks/theme-set"; then
+    rm -f "$HOME/.config/omarchy/hooks/theme-set"
+fi
+
+# Create Omarchy theme hook directory and copy native hook scripts
 mkdir -p $HOME/.config/omarchy/hooks/theme-set.d/
 mv -f /tmp/theme-hook/theme-set.d/* $HOME/.config/omarchy/hooks/theme-set.d/
 
@@ -56,12 +76,12 @@ mv -f /tmp/theme-hook/theme-set.d/* $HOME/.config/omarchy/hooks/theme-set.d/
 rm -rf /tmp/theme-hook
 
 # Update permissions
-chmod +x $HOME/.config/omarchy/hooks/theme-set
-chmod +x $HOME/.config/omarchy/hooks/theme-set.d/*
+chmod 644 $HOME/.local/share/thpm/lib/theme-env.sh
+chmod 644 $HOME/.config/omarchy/hooks/theme-set.d/*
 
 for plugin in "${disabled_plugins[@]}"; do
     if [[ -f "$HOME/.config/omarchy/hooks/theme-set.d/$plugin" ]]; then
-        chmod -x "$HOME/.config/omarchy/hooks/theme-set.d/$plugin"
+        mv -f "$HOME/.config/omarchy/hooks/theme-set.d/$plugin" "$HOME/.config/omarchy/hooks/theme-set.d/$plugin.sample"
     fi
 done
 

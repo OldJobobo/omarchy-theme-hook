@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+source "${THPM_THEME_ENV:-$HOME/.local/share/thpm/lib/theme-env.sh}"
 
 create_spicetify_styling() {
     mkdir -p "$HOME/.config/spicetify/Themes/omarchy"

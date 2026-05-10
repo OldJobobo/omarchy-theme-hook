@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+source "${THPM_THEME_ENV:-$HOME/.local/share/thpm/lib/theme-env.sh}"
 
 # Intended live destination:
 # ~/.config/omarchy/hooks/theme-set.d/25-swaync.sh

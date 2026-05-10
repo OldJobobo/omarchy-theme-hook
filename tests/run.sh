@@ -162,10 +162,27 @@ make_install_git_stub() {
 mkdir -p /tmp/theme-hook
 cp "$ROOT_DIR/thpm" /tmp/theme-hook/thpm
 cp "$ROOT_DIR/theme-set" /tmp/theme-hook/theme-set
+mkdir -p /tmp/theme-hook/lib
+cp "$ROOT_DIR/lib/theme-env.sh" /tmp/theme-hook/lib/theme-env.sh
 mkdir -p /tmp/theme-hook/theme-set.d
 cp "$ROOT_DIR"/theme-set.d/*.sh /tmp/theme-hook/theme-set.d/
 EOF
   chmod +x "$bin_dir/git"
+}
+
+run_theme_hooks() {
+  local home_dir="$1"
+  shift || true
+
+  HOME="$home_dir" "$ROOT_DIR/theme-set" "$@"
+  if [[ -d "$home_dir/.config/omarchy/hooks/theme-set.d" ]]; then
+    local hook
+    for hook in "$home_dir"/.config/omarchy/hooks/theme-set.d/*; do
+      [[ -f "$hook" ]] || continue
+      [[ "$hook" == *.sample ]] && continue
+      THPM_THEME_ENV="$ROOT_DIR/lib/theme-env.sh" HOME="$home_dir" bash "$hook" "$@" || echo "Hook failed: $hook"
+    done
+  fi
 }
 
 run_thpm() {
@@ -212,8 +229,7 @@ test_thpm_enable_disable_and_list() {
   local output
 
   mkdir -p "$hook_dir"
-  printf '#!/usr/bin/env bash\n' > "$hook_dir/10-fzf.sh"
-  chmod -x "$hook_dir/10-fzf.sh"
+  printf '#!/usr/bin/env bash\n' > "$hook_dir/10-fzf.sh.sample"
 
   output="$(run_thpm "$home_dir" list)"
   assert_contains "$output" "Disabled Plugins:" "thpm list shows disabled section"
@@ -221,11 +237,13 @@ test_thpm_enable_disable_and_list() {
 
   output="$(run_thpm "$home_dir" enable fzf)"
   assert_contains "$output" "Plugin Enabled: fzf" "thpm enable reports enabled plugin"
-  assert_file_executable "$hook_dir/10-fzf.sh" "thpm enable marks plugin executable"
+  assert_file_exists "$hook_dir/10-fzf.sh" "thpm enable restores .sh hook"
+  assert_file_missing "$hook_dir/10-fzf.sh.sample" "thpm enable removes .sample suffix"
 
   output="$(run_thpm "$home_dir" disable fzf)"
   assert_contains "$output" "Plugin Disabled: fzf" "thpm disable reports disabled plugin"
-  assert_file_not_executable "$hook_dir/10-fzf.sh" "thpm disable removes executable bit"
+  assert_file_exists "$hook_dir/10-fzf.sh.sample" "thpm disable adds .sample suffix"
+  assert_file_missing "$hook_dir/10-fzf.sh" "thpm disable removes active .sh hook"
 
   output="$(run_thpm "$home_dir" enable missing-plugin)"
   assert_contains "$output" "Plugin not found: missing-plugin" "thpm enable reports missing plugin"
@@ -238,8 +256,7 @@ test_thpm_aliases() {
   local output
 
   mkdir -p "$hook_dir" "$bin_dir"
-  printf '#!/usr/bin/env bash\n' > "$hook_dir/10-fzf.sh"
-  chmod -x "$hook_dir/10-fzf.sh"
+  printf '#!/usr/bin/env bash\n' > "$hook_dir/10-fzf.sh.sample"
   make_stub_bin "$bin_dir" omarchy-hook 'printf "omarchy-hook %s\n" "$*"'
   make_stub_bin "$bin_dir" curl 'printf "curl %s\n" "$*"'
 
@@ -292,8 +309,7 @@ test_thpm_gtk_post_enable_disable_updates_gsettings() {
   local gsettings_log="$TMP_ROOT/gsettings.log"
 
   mkdir -p "$hook_dir" "$bin_dir" "$home_dir/.config/omarchy/current/theme"
-  printf '#!/usr/bin/env bash\n' > "$hook_dir/10-gtk.sh"
-  chmod -x "$hook_dir/10-gtk.sh"
+  printf '#!/usr/bin/env bash\n' > "$hook_dir/10-gtk.sh.sample"
   cat > "$bin_dir/gsettings" <<EOF
 #!/usr/bin/env bash
 printf '%s\n' "\$*" >> "$gsettings_log"
@@ -322,6 +338,7 @@ test_theme_set_exports_colors_and_runs_enabled_hooks() {
 
   cat > "$hook_dir/10-capture.sh" <<EOF
 #!/usr/bin/env bash
+source "$ROOT_DIR/lib/theme-env.sh"
 {
   printf 'primary_background=%s\n' "\$primary_background"
   printf 'primary_foreground=%s\n' "\$primary_foreground"
@@ -331,15 +348,14 @@ test_theme_set_exports_colors_and_runs_enabled_hooks() {
 } > "$output_file"
 require_restart nonexistent-app
 EOF
-  chmod +x "$hook_dir/10-capture.sh"
 
   cat > "$hook_dir/20-disabled.sh" <<EOF
 #!/usr/bin/env bash
 printf 'disabled hook ran\n' > "$skipped_file"
 EOF
-  chmod -x "$hook_dir/20-disabled.sh"
+  mv "$hook_dir/20-disabled.sh" "$hook_dir/20-disabled.sh.sample"
 
-  PATH="$bin_dir:$PATH" HOME="$home_dir" "$ROOT_DIR/theme-set"
+  PATH="$bin_dir:$PATH" run_theme_hooks "$home_dir"
 
   assert_contains "$(cat "$output_file")" "primary_background=101112" "theme-set exports background color"
   assert_contains "$(cat "$output_file")" "primary_foreground=f1f2f3" "theme-set exports foreground color"
@@ -348,25 +364,29 @@ EOF
   assert_contains "$(cat "$output_file")" "bright_white=ffffff" "theme-set exports bright palette color"
 
   if [[ -e "$skipped_file" ]]; then
-    fail "theme-set skips non-executable hooks"
+    fail "theme-set skips .sample hooks"
   else
-    pass "theme-set skips non-executable hooks"
+    pass "theme-set skips .sample hooks"
   fi
 }
 
-test_theme_set_errors_without_colors_file() {
+test_theme_env_errors_without_colors_file() {
   local home_dir="$TMP_ROOT/missing-colors-home"
   local output
   local status
 
   mkdir -p "$home_dir"
+  cat > "$home_dir/missing-colors-hook.sh" <<EOF
+#!/usr/bin/env bash
+source "$ROOT_DIR/lib/theme-env.sh"
+EOF
   set +e
-  output="$(HOME="$home_dir" "$ROOT_DIR/theme-set" 2>&1)"
+  output="$(HOME="$home_dir" bash "$home_dir/missing-colors-hook.sh" 2>&1)"
   status=$?
   set +e
 
-  assert_eq "1" "$status" "theme-set exits non-zero without colors.toml"
-  assert_contains "$output" "colors.toml not found" "theme-set explains missing colors.toml"
+  assert_eq "1" "$status" "theme env exits non-zero without colors.toml"
+  assert_contains "$output" "colors.toml not found" "theme env explains missing colors.toml"
 }
 
 test_theme_set_reports_hook_failure() {
@@ -381,15 +401,14 @@ test_theme_set_reports_hook_failure() {
 #!/usr/bin/env bash
 exit 42
 EOF
-  chmod +x "$hook_dir/10-fail.sh"
 
   set +e
-  output="$(HOME="$home_dir" "$ROOT_DIR/theme-set" 2>&1)"
+  output="$(run_theme_hooks "$home_dir" 2>&1)"
   status=$?
   set +e
 
-  assert_eq "1" "$status" "theme-set exits non-zero when an enabled hook fails"
-  assert_contains "$output" "Hook 10-fail.sh failed" "theme-set names failed hook"
+  assert_eq "0" "$status" "theme hook runner continues when an enabled hook fails"
+  assert_contains "$output" "Hook failed: $hook_dir/10-fail.sh" "theme hook runner names failed hook"
 }
 
 test_theme_set_sends_restart_notification() {
@@ -409,11 +428,11 @@ EOF
 
   cat > "$hook_dir/10-restart.sh" <<'EOF'
 #!/usr/bin/env bash
+source "$THPM_THEME_ENV"
 require_restart sampleapp
 EOF
-  chmod +x "$hook_dir/10-restart.sh"
 
-  PATH="$bin_dir:$PATH" HOME="$home_dir" "$ROOT_DIR/theme-set"
+  PATH="$bin_dir:$PATH" run_theme_hooks "$home_dir"
 
   assert_file_exists "$notify_log" "theme-set sends notification for running restart target"
   assert_contains "$(cat "$notify_log")" "Theme Hook Plugin Manager" "restart notification has title"
@@ -435,7 +454,7 @@ test_qutebrowser_plugin_writes_theme_and_config() {
   make_stub_bin "$bin_dir" pgrep 'exit 1'
   make_stub_bin "$bin_dir" notify-send 'exit 0'
 
-  PATH="$bin_dir:$PATH" HOME="$home_dir" "$ROOT_DIR/theme-set"
+  PATH="$bin_dir:$PATH" run_theme_hooks "$home_dir"
 
   assert_file_exists "$draw_file" "qutebrowser plugin writes draw.py"
   assert_contains "$(cat "$draw_file")" "bg        = '#101112'" "qutebrowser draw.py uses background"
@@ -469,7 +488,7 @@ printf '%s\n' "\$*" > "$notify_log"
 EOF
   chmod +x "$bin_dir/notify-send"
 
-  PATH="$bin_dir:$PATH" HOME="$home_dir" "$ROOT_DIR/theme-set"
+  PATH="$bin_dir:$PATH" run_theme_hooks "$home_dir"
 
   assert_contains "$(cat "$draw_file")" "preferred_color_scheme = 'light'" "qutebrowser switches draw.py to light mode"
   assert_file_exists "$notify_log" "qutebrowser mode change requests restart notification"
@@ -490,7 +509,7 @@ test_fzf_plugin_writes_fish_theme() {
   make_stub_bin "$bin_dir" pgrep 'exit 1'
   make_stub_bin "$bin_dir" notify-send 'exit 0'
 
-  PATH="$bin_dir:$PATH" HOME="$home_dir" "$ROOT_DIR/theme-set" >/dev/null
+  PATH="$bin_dir:$PATH" run_theme_hooks "$home_dir" >/dev/null
 
   assert_file_exists "$output_file" "fzf plugin writes fzf.fish"
   assert_contains "$(cat "$output_file")" "set -l color00 '#000000'" "fzf plugin writes normal black"
@@ -512,7 +531,7 @@ test_fish_plugin_writes_shell_colors() {
   make_stub_bin "$bin_dir" pgrep 'exit 1'
   make_stub_bin "$bin_dir" notify-send 'exit 0'
 
-  PATH="$bin_dir:$PATH" HOME="$home_dir" "$ROOT_DIR/theme-set" >/dev/null
+  PATH="$bin_dir:$PATH" run_theme_hooks "$home_dir" >/dev/null
 
   assert_file_exists "$output_file" "fish plugin writes colors.fish"
   assert_contains "$(cat "$output_file")" "set -U background '#101112'" "fish plugin writes background"
@@ -529,7 +548,6 @@ test_obsidian_terminal_plugin_discovers_registered_vault() {
   write_colors_fixture "$home_dir"
   mkdir -p "$hook_dir" "$(dirname "$data_file")" "$home_dir/.config/obsidian"
   cp "$ROOT_DIR/theme-set.d/35-obsidian-terminal.sh" "$hook_dir/35-obsidian-terminal.sh"
-  chmod +x "$hook_dir/35-obsidian-terminal.sh"
   cat > "$home_dir/.config/obsidian/obsidian.json" <<EOF
 {
   "vaults": {
@@ -547,17 +565,18 @@ EOF
 }
 EOF
 
-  XDG_CONFIG_HOME="$home_dir/.config" HOME="$home_dir" "$ROOT_DIR/theme-set" >/dev/null
+  XDG_CONFIG_HOME="$home_dir/.config" run_theme_hooks "$home_dir" >/dev/null
 
   assert_eq "#101112" "$(jq -r '.terminalOptions.theme.background' "$data_file")" "obsidian terminal plugin uses registered vault path"
   assert_eq "#f1f2f3" "$(jq -r '.terminalOptions.theme.foreground' "$data_file")" "obsidian terminal plugin writes foreground"
   assert_eq "14" "$(jq -r '.terminalOptions.fontSize' "$data_file")" "obsidian terminal plugin preserves existing settings"
 }
 
-test_obsidian_terminal_plugin_direct_run_does_not_clear_theme() {
+test_obsidian_terminal_plugin_direct_run_loads_theme_env() {
   local home_dir="$TMP_ROOT/obsidian-direct-home"
   local data_file="$home_dir/Documents/Vault/.obsidian/plugins/terminal/data.json"
 
+  write_colors_fixture "$home_dir"
   mkdir -p "$(dirname "$data_file")"
   cat > "$data_file" <<'EOF'
 {
@@ -569,9 +588,9 @@ test_obsidian_terminal_plugin_direct_run_does_not_clear_theme() {
 }
 EOF
 
-  HOME="$home_dir" "$ROOT_DIR/theme-set.d/35-obsidian-terminal.sh" >/dev/null
+  XDG_CONFIG_HOME="$home_dir/.config" THPM_THEME_ENV="$ROOT_DIR/lib/theme-env.sh" HOME="$home_dir" "$ROOT_DIR/theme-set.d/35-obsidian-terminal.sh" >/dev/null
 
-  assert_eq "#010203" "$(jq -r '.terminalOptions.theme.background' "$data_file")" "obsidian terminal plugin direct run preserves existing theme"
+  assert_eq "#101112" "$(jq -r '.terminalOptions.theme.background' "$data_file")" "obsidian terminal plugin direct run loads theme env"
 }
 
 test_foot_plugin_respects_disable_flag() {
@@ -585,7 +604,7 @@ test_foot_plugin_respects_disable_flag() {
   cp "$ROOT_DIR/theme-set.d/26-foot-live-colors.sh" "$hook_dir/26-foot-live-colors.sh"
   chmod +x "$hook_dir/26-foot-live-colors.sh"
 
-  FOOT_LIVE_THEME=0 HOME="$home_dir" "$ROOT_DIR/theme-set" >/dev/null
+  FOOT_LIVE_THEME=0 run_theme_hooks "$home_dir" >/dev/null
 
   assert_file_exists "$log_file" "foot plugin writes log when disabled"
   assert_contains "$(cat "$log_file")" "disabled via FOOT_LIVE_THEME=0" "foot plugin respects disable flag"
@@ -602,7 +621,7 @@ test_foot_plugin_logs_missing_theme_file() {
   cp "$ROOT_DIR/theme-set.d/26-foot-live-colors.sh" "$hook_dir/26-foot-live-colors.sh"
   chmod +x "$hook_dir/26-foot-live-colors.sh"
 
-  HOME="$home_dir" "$ROOT_DIR/theme-set" >/dev/null
+  run_theme_hooks "$home_dir" >/dev/null
 
   assert_file_exists "$log_file" "foot plugin writes log when foot.ini is missing"
   assert_contains "$(cat "$log_file")" "missing theme file:" "foot plugin logs missing foot.ini"
@@ -637,7 +656,7 @@ alpha = 0.75
 EOF
   make_stub_bin "$bin_dir" ps 'exit 0'
 
-  PATH="$bin_dir:$PATH" HOME="$home_dir" "$ROOT_DIR/theme-set" >/dev/null
+  PATH="$bin_dir:$PATH" run_theme_hooks "$home_dir" >/dev/null
 
   assert_file_exists "$log_file" "foot plugin logs when no foot tty is available"
   assert_contains "$(cat "$log_file")" "no foot tty updates applied (attempted=0)" "foot plugin handles no writable foot tty"
@@ -690,7 +709,7 @@ cat > "$bin_dir/ps" <<PS
 printf '100 0 %s foot\n' "\$tty_name"
 PS
 chmod +x "$bin_dir/ps"
-PATH="$bin_dir:\$PATH" HOME="$home_dir" "$ROOT_DIR/theme-set"
+THPM_THEME_ENV="$ROOT_DIR/lib/theme-env.sh" PATH="$bin_dir:\$PATH" HOME="$home_dir" "$hook_dir/26-foot-live-colors.sh"
 EOF
   chmod +x "$wrapper"
 
@@ -735,7 +754,7 @@ EOF
   chmod +x "$bin_dir/pkill"
   make_stub_bin "$bin_dir" notify-send 'exit 0'
 
-  PATH="$bin_dir:$PATH" HOME="$home_dir" "$ROOT_DIR/theme-set" >/dev/null
+  PATH="$bin_dir:$PATH" run_theme_hooks "$home_dir" >/dev/null
 
   assert_file_exists "$theme_file" "cava plugin writes omarchy theme"
   assert_contains "$(cat "$theme_file")" "gradient_color_1 = '#666666'" "cava theme uses normal cyan"
@@ -765,7 +784,7 @@ EOF
   make_stub_bin "$bin_dir" pgrep 'exit 1'
   make_stub_bin "$bin_dir" notify-send 'exit 0'
 
-  PATH="$bin_dir:$PATH" HOME="$home_dir" "$ROOT_DIR/theme-set" >/dev/null
+  PATH="$bin_dir:$PATH" run_theme_hooks "$home_dir" >/dev/null
   theme_count="$(grep -c "theme = 'omarchy'" "$config_file")"
 
   assert_eq "1" "$theme_count" "cava plugin does not duplicate existing theme setting"
@@ -790,7 +809,7 @@ printf '%s\n' "\$*" > "$notify_log"
 EOF
   chmod +x "$bin_dir/notify-send"
 
-  PATH="$bin_dir:$PATH" HOME="$home_dir" "$ROOT_DIR/theme-set" >/dev/null
+  PATH="$bin_dir:$PATH" run_theme_hooks "$home_dir" >/dev/null
 
   assert_file_exists "$theme_file" "superfile plugin writes omarchy theme"
   assert_contains "$(cat "$theme_file")" "full_screen_bg = '#101112'" "superfile theme uses background"
@@ -821,7 +840,7 @@ printf '%s\n' "\$*" >> "$reload_log"
 EOF
   chmod +x "$bin_dir/swaync-client"
 
-  PATH="$bin_dir:$PATH" HOME="$home_dir" "$ROOT_DIR/theme-set" >/dev/null
+  PATH="$bin_dir:$PATH" run_theme_hooks "$home_dir" >/dev/null
 
   assert_file_exists "$target_dir/style.css" "swaync plugin installs style.css"
   assert_file_exists "$target_dir/config.json" "swaync plugin installs config.json"
@@ -852,7 +871,7 @@ test_swaync_plugin_prefers_named_theme_over_current_theme() {
   make_stub_bin "$bin_dir" swaync 'exit 0'
   make_stub_bin "$bin_dir" swaync-client 'exit 0'
 
-  PATH="$bin_dir:$PATH" HOME="$home_dir" "$ROOT_DIR/theme-set" >/dev/null
+  PATH="$bin_dir:$PATH" run_theme_hooks "$home_dir" >/dev/null
 
   assert_eq "style-named" "$(cat "$target_dir/style.css")" "swaync plugin prefers named theme style"
   assert_eq '{"config":"named"}' "$(cat "$target_dir/config.json")" "swaync plugin prefers named theme config"
@@ -873,7 +892,7 @@ test_tmux_plugin_skips_without_theme_conf() {
   make_stub_bin "$bin_dir" pgrep 'exit 1'
   make_stub_bin "$bin_dir" notify-send 'exit 0'
 
-  PATH="$bin_dir:$PATH" HOME="$home_dir" "$ROOT_DIR/theme-set" >/dev/null
+  PATH="$bin_dir:$PATH" run_theme_hooks "$home_dir" >/dev/null
 
   assert_file_missing "$target_file" "tmux plugin skips when theme has no tmux.conf"
 }
@@ -900,7 +919,7 @@ EOF
   make_stub_bin "$bin_dir" pgrep 'exit 1'
   make_stub_bin "$bin_dir" notify-send 'exit 0'
 
-  PATH="$bin_dir:$PATH" HOME="$home_dir" "$ROOT_DIR/theme-set" >/dev/null
+  PATH="$bin_dir:$PATH" run_theme_hooks "$home_dir" >/dev/null
 
   assert_file_missing "$target_file" "tmux plugin removes stale managed theme file"
   assert_not_contains "$(cat "$config_file")" "source-file ~/.config/tmux/omarchy-theme.conf" "tmux plugin removes managed source line"
@@ -930,8 +949,8 @@ EOF
   make_stub_bin "$bin_dir" pgrep 'exit 1'
   make_stub_bin "$bin_dir" notify-send 'exit 0'
 
-  PATH="$bin_dir:$PATH" HOME="$home_dir" "$ROOT_DIR/theme-set" >/dev/null
-  PATH="$bin_dir:$PATH" HOME="$home_dir" "$ROOT_DIR/theme-set" >/dev/null
+  PATH="$bin_dir:$PATH" run_theme_hooks "$home_dir" >/dev/null
+  PATH="$bin_dir:$PATH" run_theme_hooks "$home_dir" >/dev/null
 
   assert_file_exists "$target_file" "tmux plugin installs theme file"
   assert_eq "$(cat "$theme_file")" "$(cat "$target_file")" "tmux plugin copies current theme tmux.conf"
@@ -960,7 +979,7 @@ test_tmux_plugin_prefers_existing_legacy_config() {
   make_stub_bin "$bin_dir" pgrep 'exit 1'
   make_stub_bin "$bin_dir" notify-send 'exit 0'
 
-  PATH="$bin_dir:$PATH" HOME="$home_dir" "$ROOT_DIR/theme-set" >/dev/null
+  PATH="$bin_dir:$PATH" run_theme_hooks "$home_dir" >/dev/null
 
   assert_contains "$(cat "$legacy_config")" "source-file ~/.config/tmux/omarchy-theme.conf" "tmux plugin uses existing legacy tmux config"
   assert_file_missing "$xdg_config" "tmux plugin does not create xdg config when legacy config exists"
@@ -981,7 +1000,7 @@ test_vscode_plugin_skips_when_theme_provides_vscode_json() {
   make_stub_bin "$bin_dir" pgrep 'exit 1'
   make_stub_bin "$bin_dir" notify-send 'exit 0'
 
-  PATH="$bin_dir:$PATH" HOME="$home_dir" "$ROOT_DIR/theme-set" >/dev/null
+  PATH="$bin_dir:$PATH" run_theme_hooks "$home_dir" >/dev/null
 
   assert_file_missing "$generated_file" "vscode plugin skips generated colors when vscode.json exists"
 }
@@ -1019,7 +1038,7 @@ EOF
   make_stub_bin "$bin_dir" pgrep 'exit 1'
   make_stub_bin "$bin_dir" notify-send 'exit 0'
 
-  PATH="$bin_dir:$PATH" HOME="$home_dir" "$ROOT_DIR/theme-set" >/dev/null
+  PATH="$bin_dir:$PATH" run_theme_hooks "$home_dir" >/dev/null
 
   assert_file_exists "$theme_file" "vscode plugin installs omarchy theme file"
   assert_contains "$(cat "$theme_file")" '"name": "Omarchy"' "vscode theme file contains Omarchy theme"
@@ -1064,11 +1083,11 @@ EOF
   mkdir -p "$hook_dir"
   cat > "$hook_dir/10-capture.sh" <<EOF
 #!/usr/bin/env bash
+source "$ROOT_DIR/lib/theme-env.sh"
 printf '%s\n' "\$primary_background|\$primary_foreground|\$rgb_primary_background" > "$output_file"
 EOF
-  chmod +x "$hook_dir/10-capture.sh"
 
-  HOME="$home_dir" "$ROOT_DIR/theme-set"
+  run_theme_hooks "$home_dir"
 
   assert_eq "010203|a0b0c0|1, 2, 3" "$(cat "$output_file")" "theme-set extracts colors with whitespace and comments"
 }
@@ -1080,10 +1099,12 @@ test_install_preserves_disabled_plugins_and_installs_files() {
   local installed_thpm="$home_dir/.local/bin/thpm"
   local legacy_thpm="$home_dir/.local/share/omarchy/bin/thpm"
   local installed_theme_set="$home_dir/.config/omarchy/hooks/theme-set"
+  local installed_theme_env="$home_dir/.local/share/thpm/lib/theme-env.sh"
   local output
 
   mkdir -p "$hook_dir" "$bin_dir" "$home_dir/.local/share/omarchy/bin"
   printf '#!/usr/bin/env bash\n' > "$legacy_thpm"
+  printf '# Omarchy 3.3+ uses colors.toml as the source of truth for theme colors.\n' > "$installed_theme_set"
   printf '#!/usr/bin/env bash\n' > "$hook_dir/00-fish.sh"
   chmod -x "$hook_dir/00-fish.sh"
 
@@ -1099,9 +1120,11 @@ test_install_preserves_disabled_plugins_and_installs_files() {
   assert_contains "$output" "omarchy-hook theme-set" "install applies theme-set hook"
   assert_file_executable "$installed_thpm" "install writes executable thpm"
   assert_file_missing "$legacy_thpm" "install removes legacy omarchy bin thpm"
-  assert_file_executable "$installed_theme_set" "install writes executable theme-set hook"
-  assert_file_not_executable "$hook_dir/00-fish.sh" "install preserves disabled plugin permission"
-  assert_file_executable "$hook_dir/30-vscode.sh" "install enables bundled plugins by default"
+  assert_file_missing "$installed_theme_set" "install removes old thpm theme-set dispatcher"
+  assert_file_exists "$installed_theme_env" "install writes shared theme env"
+  assert_file_exists "$hook_dir/00-fish.sh.sample" "install preserves disabled plugin as sample"
+  assert_file_missing "$hook_dir/00-fish.sh" "install removes active file for disabled plugin"
+  assert_file_exists "$hook_dir/30-vscode.sh" "install enables bundled plugins by default"
 }
 
 test_install_interactive_prompt_installs_missing_adw_theme() {
@@ -1168,8 +1191,11 @@ test_uninstall_removes_files_and_qutebrowser_theme() {
   mkdir -p "$bin_dir" "$home_dir/.local/bin" "$home_dir/.local/share/omarchy/bin" "$home_dir/.config/omarchy/hooks/theme-set.d" "$home_dir/.config/qutebrowser/omarchy"
   printf '#!/usr/bin/env bash\n' > "$home_dir/.local/bin/thpm"
   printf '#!/usr/bin/env bash\n' > "$home_dir/.local/share/omarchy/bin/thpm"
-  printf '#!/usr/bin/env bash\n' > "$home_dir/.config/omarchy/hooks/theme-set"
-  printf '#!/usr/bin/env bash\n' > "$home_dir/.config/omarchy/hooks/theme-set.d/10-fzf.sh"
+  printf '# Omarchy 3.3+ uses colors.toml as the source of truth for theme colors.\n' > "$home_dir/.config/omarchy/hooks/theme-set"
+  printf '#!/usr/bin/env bash\n' > "$home_dir/.config/omarchy/hooks/theme-set.d/00-fzf.sh"
+  printf '#!/usr/bin/env bash\n' > "$home_dir/.config/omarchy/hooks/theme-set.d/99-custom.sh"
+  mkdir -p "$home_dir/.local/share/thpm/lib"
+  printf '#!/usr/bin/env bash\n' > "$home_dir/.local/share/thpm/lib/theme-env.sh"
   cat > "$home_dir/.config/qutebrowser/config.py" <<'EOF'
 config.load_autoconfig()
 import omarchy.draw
@@ -1190,7 +1216,9 @@ EOF
   assert_file_missing "$home_dir/.local/bin/thpm" "uninstall removes thpm binary"
   assert_file_missing "$home_dir/.local/share/omarchy/bin/thpm" "uninstall removes legacy omarchy bin thpm"
   assert_file_missing "$home_dir/.config/omarchy/hooks/theme-set" "uninstall removes theme-set hook"
-  assert_file_missing "$home_dir/.config/omarchy/hooks/theme-set.d" "uninstall removes plugin directory"
+  assert_file_missing "$home_dir/.config/omarchy/hooks/theme-set.d/00-fzf.sh" "uninstall removes bundled plugin"
+  assert_file_exists "$home_dir/.config/omarchy/hooks/theme-set.d/99-custom.sh" "uninstall preserves custom Omarchy hook"
+  assert_file_missing "$home_dir/.local/share/thpm/lib/theme-env.sh" "uninstall removes shared theme env"
   assert_file_missing "$home_dir/.config/qutebrowser/omarchy" "uninstall removes qutebrowser theme directory"
   assert_eq "config.load_autoconfig()" "$(cat "$home_dir/.config/qutebrowser/config.py")" "uninstall removes qutebrowser config lines"
 }
@@ -1238,10 +1266,11 @@ EOF
 }
 
 print_coverage_summary() {
-  local all_scripts=("$ROOT_DIR/thpm" "$ROOT_DIR/theme-set" "$ROOT_DIR/install.sh" "$ROOT_DIR/uninstall.sh")
+  local all_scripts=("$ROOT_DIR/thpm" "$ROOT_DIR/theme-set" "$ROOT_DIR/install.sh" "$ROOT_DIR/uninstall.sh" "$ROOT_DIR/lib/theme-env.sh")
   local direct_scripts=(
     "$ROOT_DIR/thpm"
     "$ROOT_DIR/theme-set"
+    "$ROOT_DIR/lib/theme-env.sh"
     "$ROOT_DIR/install.sh"
     "$ROOT_DIR/uninstall.sh"
     "$ROOT_DIR/theme-set.d/00-fish.sh"
@@ -1281,7 +1310,7 @@ main() {
   test_thpm_open_uses_xdg_open_for_hook_dir
   test_thpm_gtk_post_enable_disable_updates_gsettings
   test_theme_set_exports_colors_and_runs_enabled_hooks
-  test_theme_set_errors_without_colors_file
+  test_theme_env_errors_without_colors_file
   test_theme_set_reports_hook_failure
   test_theme_set_sends_restart_notification
   test_qutebrowser_plugin_writes_theme_and_config
@@ -1289,7 +1318,7 @@ main() {
   test_fzf_plugin_writes_fish_theme
   test_fish_plugin_writes_shell_colors
   test_obsidian_terminal_plugin_discovers_registered_vault
-  test_obsidian_terminal_plugin_direct_run_does_not_clear_theme
+  test_obsidian_terminal_plugin_direct_run_loads_theme_env
   test_foot_plugin_respects_disable_flag
   test_foot_plugin_logs_missing_theme_file
   test_foot_plugin_reads_theme_and_logs_no_ttys
