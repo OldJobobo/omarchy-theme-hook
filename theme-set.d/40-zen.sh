@@ -39,18 +39,21 @@ remove_managed_import_block() {
 
 write_import_block() {
     local file="$1"
-    local target="$2"
+    shift
+    local target
 
     {
         printf '%s\n' "$import_start"
-        printf '@import url("./%s");\n' "$target"
+        for target in "$@"; do
+            printf '@import url("./%s");\n' "$target"
+        done
         printf '%s\n' "$import_end"
     } > "$file"
 }
 
 ensure_managed_import_block() {
     local file="$1"
-    local target="$2"
+    shift
     local tmp_file
 
     mkdir -p "$(dirname "$file")"
@@ -60,12 +63,12 @@ ensure_managed_import_block() {
 
     if [[ -f "$file" ]]; then
         tmp_file="${file}.thpm-tmp"
-        write_import_block "$tmp_file" "$target"
+        write_import_block "$tmp_file" "$@"
         printf '\n' >> "$tmp_file"
         cat "$file" >> "$tmp_file"
         mv "$tmp_file" "$file"
     else
-        write_import_block "$file" "$target"
+        write_import_block "$file" "$@"
     fi
 }
 
@@ -96,15 +99,15 @@ backup_once() {
 
 migrate_legacy_file_to_import() {
     local file="$1"
-    local target="$2"
-    local kind="$3"
+    local kind="$2"
+    shift 2
 
     if [[ "$kind" == "chrome" ]] && looks_like_legacy_user_chrome "$file"; then
         backup_once "$file"
-        write_import_block "$file" "$target"
+        write_import_block "$file" "$@"
     elif [[ "$kind" == "content" ]] && looks_like_legacy_user_content "$file"; then
         backup_once "$file"
-        write_import_block "$file" "$target"
+        write_import_block "$file" "$@"
     fi
 }
 
@@ -192,8 +195,6 @@ EOF
 cp "$output_file" "$managed_colors_file"
 
 cat > "$managed_chrome_file" << 'EOF'
-@import url("./thpm-zen-colors.css");
-
 :root {
     --base00: var(--color00);
     --base01: color-mix(in srgb, var(--color00) 98%, white);
@@ -372,8 +373,6 @@ splitter#sidebar-tools-and-extensions-splitter {
 EOF
 
 cat > "$managed_content_file" << 'EOF'
-@import url("./thpm-zen-colors.css");
-
 :root {
     --base00: var(--color00);
     --base01: color-mix(in srgb, var(--color00) 98%, white);
@@ -433,10 +432,10 @@ body {
 }
 EOF
 
-migrate_legacy_file_to_import "$user_chrome_file" "$(basename "$managed_chrome_file")" chrome
-migrate_legacy_file_to_import "$user_content_file" "$(basename "$managed_content_file")" content
-ensure_managed_import_block "$user_chrome_file" "$(basename "$managed_chrome_file")"
-ensure_managed_import_block "$user_content_file" "$(basename "$managed_content_file")"
+migrate_legacy_file_to_import "$user_chrome_file" chrome "$(basename "$managed_colors_file")" "$(basename "$managed_chrome_file")"
+migrate_legacy_file_to_import "$user_content_file" content "$(basename "$managed_colors_file")" "$(basename "$managed_content_file")"
+ensure_managed_import_block "$user_chrome_file" "$(basename "$managed_colors_file")" "$(basename "$managed_chrome_file")"
+ensure_managed_import_block "$user_content_file" "$(basename "$managed_colors_file")" "$(basename "$managed_content_file")"
 remove_legacy_colors_if_unused
 
 require_restart "zen-browser"
