@@ -51,20 +51,34 @@ write_import_block() {
     } > "$file"
 }
 
+has_managed_imports() {
+    local file="$1"
+    shift
+    local target
+
+    [[ -f "$file" ]] || return 1
+    grep -Fq "$import_start" "$file" || return 1
+    grep -Fq "$import_end" "$file" || return 1
+    for target in "$@"; do
+        grep -Fq "$target" "$file" || return 1
+    done
+}
+
 ensure_managed_import_block() {
     local file="$1"
     shift
     local tmp_file
 
     mkdir -p "$(dirname "$file")"
-    if [[ -f "$file" ]] && grep -Fq "$import_start" "$file"; then
+    if has_managed_imports "$file" "$@"; then
         return 0
     fi
 
     if [[ -f "$file" ]]; then
-        tmp_file="${file}.thpm-tmp"
+        tmp_file="${file}.thpm-new"
         write_import_block "$tmp_file" "$@"
         printf '\n' >> "$tmp_file"
+        remove_managed_import_block "$file"
         cat "$file" >> "$tmp_file"
         mv "$tmp_file" "$file"
     else

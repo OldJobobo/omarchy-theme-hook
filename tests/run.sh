@@ -952,6 +952,48 @@ EOF
   assert_not_contains "$(cat "$user_content")" "THPM Zen hook" "zen cleanup removes userContent import marker"
 }
 
+test_zen_plugin_repairs_incomplete_managed_import_block() {
+  local home_dir="$TMP_ROOT/zen-repair-import-home"
+  local bin_dir="$TMP_ROOT/zen-repair-import-bin"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local profile_dir="$home_dir/.zen/default"
+  local user_chrome="$profile_dir/chrome/userChrome.css"
+  local user_content="$profile_dir/chrome/userContent.css"
+
+  write_colors_fixture "$home_dir"
+  mkdir -p "$hook_dir" "$bin_dir" "$profile_dir/chrome"
+  cat > "$home_dir/.zen/profiles.ini" <<'EOF'
+[Install123]
+Default=default
+EOF
+  cat > "$user_chrome" <<'EOF'
+/* THPM Zen hook start */
+/* THPM Zen hook end */
+.custom-rule { color: red; }
+EOF
+  cat > "$user_content" <<'EOF'
+/* THPM Zen hook start */
+@import url("./wrong.css");
+/* THPM Zen hook end */
+body { color: red; }
+EOF
+  cp "$ROOT_DIR/theme-set.d/40-zen.sh" "$hook_dir/40-zen.sh"
+  chmod +x "$hook_dir/40-zen.sh"
+  make_stub_bin "$bin_dir" zen-browser 'exit 0'
+  make_stub_bin "$bin_dir" pgrep 'exit 1'
+  make_stub_bin "$bin_dir" notify-send 'exit 0'
+
+  PATH="$bin_dir:$PATH" run_theme_hooks "$home_dir" >/dev/null
+
+  assert_contains "$(cat "$user_chrome")" '@import url("./thpm-zen-colors.css");' "zen plugin repairs missing userChrome colors import"
+  assert_contains "$(cat "$user_chrome")" '@import url("./thpm-zen-userChrome.css");' "zen plugin repairs missing userChrome stylesheet import"
+  assert_contains "$(cat "$user_chrome")" ".custom-rule" "zen plugin preserves userChrome content when repairing imports"
+  assert_contains "$(cat "$user_content")" '@import url("./thpm-zen-colors.css");' "zen plugin repairs missing userContent colors import"
+  assert_contains "$(cat "$user_content")" '@import url("./thpm-zen-userContent.css");' "zen plugin repairs missing userContent stylesheet import"
+  assert_not_contains "$(cat "$user_content")" "wrong.css" "zen plugin removes stale managed import block contents"
+  assert_contains "$(cat "$user_content")" "body { color: red; }" "zen plugin preserves userContent content when repairing imports"
+}
+
 test_qutebrowser_plugin_writes_theme_and_config() {
   local home_dir="$TMP_ROOT/qutebrowser-home"
   local bin_dir="$TMP_ROOT/qutebrowser-bin"
@@ -2176,6 +2218,7 @@ main() {
   test_hook_plugins_use_portable_assumption_guards
   test_browser_plugins_skip_missing_profiles
   test_zen_plugin_uses_managed_imports_and_migrates_legacy_css
+  test_zen_plugin_repairs_incomplete_managed_import_block
   test_qutebrowser_plugin_writes_theme_and_config
   test_qutebrowser_light_mode_change_requires_restart
   test_fzf_plugin_writes_fish_theme
