@@ -76,10 +76,6 @@ record_disabled_plugin() {
 }
 
 if [[ -d "$HOME/.config/omarchy/hooks/theme-set.d" ]]; then
-    for plugin in "$HOME"/.config/omarchy/hooks/theme-set.d/*.sh; do
-        [[ -f "$plugin" && ! -x "$plugin" ]] || continue
-        record_disabled_plugin "$plugin"
-    done
     for plugin in "$HOME"/.config/omarchy/hooks/theme-set.d/*.sh.sample; do
         [[ -f "$plugin" ]] || continue
         record_disabled_plugin "$plugin"

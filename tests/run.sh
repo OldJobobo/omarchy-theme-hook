@@ -1410,8 +1410,7 @@ test_install_preserves_disabled_plugins_and_installs_files() {
   mkdir -p "$hook_dir" "$bin_dir" "$home_dir/.local/share/omarchy/bin"
   printf '#!/usr/bin/env bash\n' > "$legacy_thpm"
   printf '# Omarchy 3.3+ uses colors.toml as the source of truth for theme colors.\n' > "$installed_theme_set"
-  printf '#!/usr/bin/env bash\n' > "$hook_dir/00-fish.sh"
-  chmod -x "$hook_dir/00-fish.sh"
+  printf '#!/usr/bin/env bash\n' > "$hook_dir/00-fish.sh.sample"
 
   make_stub_bin "$bin_dir" pacman 'exit 0'
   make_stub_bin "$bin_dir" sudo 'printf "sudo should not be called\n" >&2; exit 1'
@@ -1435,6 +1434,31 @@ test_install_preserves_disabled_plugins_and_installs_files() {
   assert_file_exists "$hook_dir/00-fish.sh.sample" "install preserves disabled plugin as sample"
   assert_file_missing "$hook_dir/00-fish.sh" "install removes active file for disabled plugin"
   assert_file_exists "$hook_dir/30-vscode.sh" "install enables bundled plugins by default"
+}
+
+test_install_keeps_non_executable_hooks_enabled() {
+  local home_dir="$TMP_ROOT/install-non-executable-home"
+  local bin_dir="$TMP_ROOT/install-non-executable-bin"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local status
+
+  rm -f "$TMP_ROOT/install-git-branch.log"
+  rm -f "$TMP_ROOT/install-git-args.log"
+  mkdir -p "$hook_dir" "$bin_dir"
+  printf '#!/usr/bin/env bash\n' > "$hook_dir/30-vscode.sh"
+  chmod 644 "$hook_dir/30-vscode.sh"
+  make_stub_bin "$bin_dir" pacman 'exit 0'
+  make_stub_bin "$bin_dir" sudo 'printf "sudo should not be called\n" >&2; exit 1'
+  make_stub_bin "$bin_dir" omarchy-hook 'exit 0'
+  make_stub_bin "$bin_dir" omarchy-show-done 'exit 0'
+  make_install_git_stub "$bin_dir"
+
+  PATH="$bin_dir:$PATH" HOME="$home_dir" "$ROOT_DIR/install.sh" >/dev/null 2>&1
+  status=$?
+
+  assert_success "$status" "install with non-executable active hook exits successfully"
+  assert_file_exists "$hook_dir/30-vscode.sh" "install keeps non-executable active hook enabled"
+  assert_file_missing "$hook_dir/30-vscode.sh.sample" "install does not convert non-executable hook to sample"
 }
 
 test_install_respects_branch_override() {
@@ -1827,6 +1851,7 @@ main() {
   test_vscode_plugin_patches_extension_manifest_and_installs_theme
   test_theme_set_extracts_colors_with_leading_whitespace_and_comments
   test_install_preserves_disabled_plugins_and_installs_files
+  test_install_keeps_non_executable_hooks_enabled
   test_install_respects_branch_override
   test_install_preserves_existing_sample_disabled_plugin
   test_install_disabled_sample_wins_over_stale_active_plugin
