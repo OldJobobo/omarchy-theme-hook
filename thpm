@@ -501,7 +501,7 @@ doctor_check_zen_imports() {
     if grep -Fq "$expected_a" "$file" && grep -Fq "$expected_b" "$file"; then
         doctor_ok "$display_name imports THPM Zen stylesheets"
     else
-        doctor_warn "$display_name does not import all THPM Zen stylesheets"
+        doctor_warn "$display_name does not reference $expected_a and $expected_b"
     fi
 
     if awk '
@@ -529,8 +529,8 @@ doctor_check_zen_generated_theme() {
     doctor_check_zen_managed_css_file "$chrome_dir/thpm-zen-colors.css" "Zen managed colors stylesheet"
     doctor_check_zen_managed_css_file "$chrome_dir/thpm-zen-userChrome.css" "Zen managed browser chrome stylesheet"
     doctor_check_zen_managed_css_file "$chrome_dir/thpm-zen-userContent.css" "Zen managed content stylesheet"
-    doctor_check_zen_imports "$user_chrome_file" "Zen userChrome.css" '@import url("./thpm-zen-colors.css");' '@import url("./thpm-zen-userChrome.css");'
-    doctor_check_zen_imports "$user_content_file" "Zen userContent.css" '@import url("./thpm-zen-colors.css");' '@import url("./thpm-zen-userContent.css");'
+    doctor_check_zen_imports "$user_chrome_file" "Zen userChrome.css" "thpm-zen-colors.css" "thpm-zen-userChrome.css"
+    doctor_check_zen_imports "$user_content_file" "Zen userContent.css" "thpm-zen-colors.css" "thpm-zen-userContent.css"
 
     if command -v pgrep >/dev/null 2>&1 && pgrep -x zen-browser >/dev/null; then
         doctor_info "Zen Browser is running; restart it after thpm run to reload browser chrome CSS"

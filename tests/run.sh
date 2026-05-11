@@ -624,6 +624,47 @@ EOF
   assert_contains "$output" "may override Zen theme CSS" "thpm doctor zen warns about later imports"
 }
 
+test_thpm_doctor_zen_accepts_existing_import_variants() {
+  local home_dir="$TMP_ROOT/doctor-zen-import-variant-home"
+  local bin_dir="$TMP_ROOT/doctor-zen-import-variant-bin"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local profile_dir="$home_dir/.zen/default"
+  local chrome_dir="$profile_dir/chrome"
+  local output
+
+  write_colors_fixture "$home_dir"
+  mkdir -p "$hook_dir" "$bin_dir" "$chrome_dir"
+  cp "$ROOT_DIR/theme-set.d/40-zen.sh" "$hook_dir/40-zen.sh"
+  cat > "$home_dir/.zen/profiles.ini" <<'EOF'
+[Install123]
+Default=default
+EOF
+  printf '/* colors */\n' > "$chrome_dir/thpm-zen-colors.css"
+  printf '/* chrome */\n' > "$chrome_dir/thpm-zen-userChrome.css"
+  printf '/* content */\n' > "$chrome_dir/thpm-zen-userContent.css"
+  cat > "$chrome_dir/userChrome.css" <<'EOF'
+/* THPM Zen hook start */
+@import url("thpm-zen-colors.css");
+@import url("thpm-zen-userChrome.css");
+/* THPM Zen hook end */
+EOF
+  cat > "$chrome_dir/userContent.css" <<'EOF'
+/* THPM Zen hook start */
+@import url('thpm-zen-colors.css');
+@import url('thpm-zen-userContent.css');
+/* THPM Zen hook end */
+EOF
+  make_stub_bin "$bin_dir" omarchy-hook 'exit 0'
+  make_stub_bin "$bin_dir" zen-browser 'exit 0'
+  make_stub_bin "$bin_dir" pgrep 'exit 1'
+
+  output="$(PATH="$bin_dir:$PATH" THPM_THEME_ENV="$ROOT_DIR/lib/theme-env.sh" HOME="$home_dir" "$ROOT_DIR/thpm" doctor zen 2>&1)"
+
+  assert_contains "$output" "Zen userChrome.css imports THPM Zen stylesheets" "thpm doctor zen accepts import syntax variants in userChrome"
+  assert_contains "$output" "Zen userContent.css imports THPM Zen stylesheets" "thpm doctor zen accepts import syntax variants in userContent"
+  assert_not_contains "$output" "does not reference thpm-zen-colors.css" "thpm doctor zen avoids false import warning for syntax variants"
+}
+
 test_thpm_doctor_limits_plugin_specific_checks() {
   local home_dir="$TMP_ROOT/doctor-specific-home"
   local bin_dir="$TMP_ROOT/doctor-specific-bin"
@@ -2124,6 +2165,7 @@ main() {
   test_thpm_doctor_reports_firefox_profile_issue
   test_thpm_doctor_zen_reports_missing_generated_files
   test_thpm_doctor_zen_reports_late_import_overrides
+  test_thpm_doctor_zen_accepts_existing_import_variants
   test_thpm_doctor_limits_plugin_specific_checks
   test_thpm_open_uses_xdg_open_for_hook_dir
   test_thpm_gtk_post_enable_disable_updates_gsettings
