@@ -25,6 +25,45 @@ fi
 # Remove any old temp files
 rm -rf /tmp/theme-hook/
 
+bundled_plugins=(
+    00-fish.sh
+    00-fzf.sh
+    10-discord.sh
+    10-gtk.sh
+    10-qt6ct.sh
+    10-spotify.sh
+    10-superfile.sh
+    10-tmux.sh
+    10-vicinae.sh
+    15-typora.sh
+    20-nwg-dock-hyprland.sh
+    20-zed.sh
+    25-swaync.sh
+    26-foot-live-colors.sh
+    30-cursor.sh
+    30-vscode.sh
+    30-windsurf.sh
+    35-obsidian-terminal.sh
+    40-cava.sh
+    40-firefox.sh
+    40-qutebrowser.sh
+    40-steam.sh
+    40-zen.sh
+    50-cliamp.sh
+    50-heroic.sh
+)
+
+is_bundled_plugin() {
+    local name="$1"
+    local plugin
+
+    for plugin in "${bundled_plugins[@]}"; do
+        [[ "$plugin" == "$name" ]] && return 0
+    done
+
+    return 1
+}
+
 disabled_plugins=()
 record_disabled_plugin() {
     local plugin="$1"
@@ -32,6 +71,7 @@ record_disabled_plugin() {
 
     name=$(basename "$plugin")
     name=${name%.sample}
+    is_bundled_plugin "$name" || return 0
     disabled_plugins+=("$name")
 }
 
@@ -79,7 +119,10 @@ rm -rf /tmp/theme-hook
 
 # Update permissions
 chmod 644 $HOME/.local/share/thpm/lib/theme-env.sh
-chmod 644 $HOME/.config/omarchy/hooks/theme-set.d/*
+for plugin in "${bundled_plugins[@]}"; do
+    [[ -f "$HOME/.config/omarchy/hooks/theme-set.d/$plugin" ]] && chmod 644 "$HOME/.config/omarchy/hooks/theme-set.d/$plugin"
+    [[ -f "$HOME/.config/omarchy/hooks/theme-set.d/$plugin.sample" ]] && chmod 644 "$HOME/.config/omarchy/hooks/theme-set.d/$plugin.sample"
+done
 
 for plugin in "${disabled_plugins[@]}"; do
     if [[ -f "$HOME/.config/omarchy/hooks/theme-set.d/$plugin" ]]; then

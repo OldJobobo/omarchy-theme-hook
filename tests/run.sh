@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TMP_ROOT="$(mktemp -d)"
 TEST_FAILURES=0
 TEST_ASSERTIONS=0
+OMARCHY_CONTRACT_FILE="$ROOT_DIR/tests/omarchy-defaults.contract"
 
 cleanup() {
   rm -rf "$TMP_ROOT"
@@ -33,6 +34,18 @@ assert_eq() {
     fail "$message"
     printf '  expected: %q\n' "$expected"
     printf '  actual:   %q\n' "$actual"
+  fi
+}
+
+assert_success() {
+  local status="$1"
+  local message="$2"
+
+  if [[ "$status" -eq 0 ]]; then
+    pass "$message"
+  else
+    fail "$message"
+    printf '  exit status: %s\n' "$status"
   fi
 }
 
@@ -112,6 +125,11 @@ assert_file_not_executable() {
   fi
 }
 
+contract_value() {
+  local key="$1"
+  awk -F= -v key="$key" '$1 == key { print substr($0, index($0, "=") + 1); exit }' "$OMARCHY_CONTRACT_FILE"
+}
+
 write_colors_fixture() {
   local home_dir="$1"
   local theme_dir="$home_dir/.config/omarchy/current/theme"
@@ -159,6 +177,24 @@ make_install_git_stub() {
 
   cat > "$bin_dir/git" <<EOF
 #!/usr/bin/env bash
+printf '%s\n' "\$*" > "$TMP_ROOT/install-git-args.log"
+if [[ "\$1" == "clone" ]]; then
+  shift
+fi
+while [[ \$# -gt 0 ]]; do
+  case "\$1" in
+    --branch)
+      printf '%s\n' "\$2" > "$TMP_ROOT/install-git-branch.log"
+      shift 2
+      ;;
+    --depth)
+      shift 2
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
 mkdir -p /tmp/theme-hook
 cp "$ROOT_DIR/thpm" /tmp/theme-hook/thpm
 cp "$ROOT_DIR/theme-set" /tmp/theme-hook/theme-set
@@ -168,6 +204,18 @@ mkdir -p /tmp/theme-hook/theme-set.d
 cp "$ROOT_DIR"/theme-set.d/*.sh /tmp/theme-hook/theme-set.d/
 EOF
   chmod +x "$bin_dir/git"
+}
+
+install_git_branch() {
+  if [[ -f "$TMP_ROOT/install-git-branch.log" ]]; then
+    cat "$TMP_ROOT/install-git-branch.log"
+  fi
+}
+
+install_git_args() {
+  if [[ -f "$TMP_ROOT/install-git-args.log" ]]; then
+    cat "$TMP_ROOT/install-git-args.log"
+  fi
 }
 
 run_theme_hooks() {
@@ -202,13 +250,76 @@ test_shell_syntax() {
   local script
   local failed=0
 
-  for script in "$ROOT_DIR/thpm" "$ROOT_DIR/theme-set" "$ROOT_DIR/install.sh" "$ROOT_DIR/uninstall.sh" "$ROOT_DIR"/theme-set.d/*.sh; do
+  for script in "$ROOT_DIR/thpm" "$ROOT_DIR/theme-set" "$ROOT_DIR/install.sh" "$ROOT_DIR/uninstall.sh" "$ROOT_DIR/lib/theme-env.sh" "$ROOT_DIR"/theme-set.d/*.sh; do
     if ! bash -n "$script"; then
       failed=1
     fi
   done
 
   assert_eq "0" "$failed" "all shell scripts pass bash -n"
+}
+
+test_installer_bundled_plugin_inventory_matches_hooks() {
+  local actual
+  local declared
+
+  actual="$(cd "$ROOT_DIR/theme-set.d" && printf '%s\n' *.sh | sort)"
+  declared="$(awk '
+    /^bundled_plugins=\(/ { in_list = 1; next }
+    in_list && /^\)/ { in_list = 0 }
+    in_list {
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", $0)
+      if ($0 != "") print $0
+    }
+  ' "$ROOT_DIR/install.sh" | sort)"
+
+  assert_eq "$actual" "$declared" "install bundled plugin inventory matches theme-set.d hooks"
+}
+
+test_project_omarchy_default_contract() {
+  local hook_dir
+  local theme_dir
+  local colors_file
+  local light_mode_file
+  local theme_name_file
+  local theme_store_dir
+  local hook_name
+  local legacy_dispatcher
+  local legacy_bin_dir
+  local shared_runtime
+
+  hook_dir="$(contract_value HOOK_DIR)"
+  theme_dir="$(contract_value THEME_DIR)"
+  colors_file="$(contract_value COLORS_FILE)"
+  light_mode_file="$(contract_value LIGHT_MODE_FILE)"
+  theme_name_file="$(contract_value THEME_NAME_FILE)"
+  theme_store_dir="$(contract_value THEME_STORE_DIR)"
+  hook_name="$(contract_value HOOK_NAME)"
+  legacy_dispatcher="$(contract_value LEGACY_DISPATCHER)"
+  legacy_bin_dir="$(contract_value LEGACY_BIN_DIR)"
+  shared_runtime="$(contract_value SHARED_RUNTIME)"
+
+  assert_file_exists "$OMARCHY_CONTRACT_FILE" "Omarchy defaults contract file exists"
+  assert_contains "$(cat "$ROOT_DIR/thpm")" "HOOK_DIR=\"\${THPM_HOOK_DIR:-\$HOME/$hook_dir}\"" "thpm default hook directory matches Omarchy contract"
+  assert_contains "$(cat "$ROOT_DIR/thpm")" "omarchy-hook \"$hook_name\"" "thpm run invokes contracted Omarchy hook"
+  assert_contains "$(cat "$ROOT_DIR/install.sh")" "\$HOME/$hook_dir" "install writes hooks to contracted Omarchy hook directory"
+  assert_contains "$(cat "$ROOT_DIR/install.sh")" "omarchy-hook $hook_name" "install reapplies contracted Omarchy hook"
+  assert_contains "$(cat "$ROOT_DIR/install.sh")" "\$HOME/$legacy_dispatcher" "install only targets contracted legacy dispatcher path"
+  assert_contains "$(cat "$ROOT_DIR/install.sh")" "\$HOME/$legacy_bin_dir/thpm" "install removes contracted legacy thpm bin path"
+  assert_contains "$(cat "$ROOT_DIR/uninstall.sh")" "\$HOME/$hook_dir" "uninstall removes hooks from contracted Omarchy hook directory"
+  assert_contains "$(cat "$ROOT_DIR/uninstall.sh")" "\$HOME/$legacy_dispatcher" "uninstall removes contracted legacy dispatcher path"
+  assert_contains "$(cat "$ROOT_DIR/uninstall.sh")" "\$HOME/$legacy_bin_dir/thpm" "uninstall removes contracted legacy thpm bin path"
+  assert_contains "$(cat "$ROOT_DIR/lib/theme-env.sh")" "\$HOME/$colors_file" "theme env reads contracted Omarchy colors file"
+  assert_contains "$(cat "$ROOT_DIR/theme-set")" "$hook_dir/* directly" "compatibility shim documents direct Omarchy hook execution"
+  assert_contains "$(cat "$ROOT_DIR/docs/plugins.md")" "~/$hook_dir/" "plugin docs show contracted Omarchy hook directory"
+  assert_contains "$(cat "$ROOT_DIR/docs/plugins.md")" "~/$colors_file" "plugin docs show contracted Omarchy colors file"
+  assert_contains "$(cat "$ROOT_DIR/README.md")" "~/$hook_dir/" "README shows contracted Omarchy hook directory"
+  assert_contains "$(cat "$ROOT_DIR/README.md")" "native Omarchy \`$hook_name.d\` hooks" "README documents direct Omarchy hook model"
+  assert_contains "$(cat "$ROOT_DIR/theme-set.d/10-gtk.sh")" "\$HOME/$light_mode_file" "GTK plugin uses contracted Omarchy light mode marker"
+  assert_contains "$(cat "$ROOT_DIR/theme-set.d/25-swaync.sh")" "\$HOME/$theme_name_file" "SwayNC plugin uses contracted Omarchy theme name file"
+  assert_contains "$(cat "$ROOT_DIR/theme-set.d/25-swaync.sh")" "\$HOME/$theme_store_dir" "SwayNC plugin uses contracted Omarchy theme store"
+  assert_contains "$(cat "$ROOT_DIR/theme-set.d/35-obsidian-terminal.sh")" "\${THPM_THEME_ENV:-\$HOME/$shared_runtime}" "direct-run plugin fallback uses contracted shared runtime"
+  assert_contains "$(cat "$ROOT_DIR/lib/theme-env.sh")" "Omarchy 3.3+" "theme env error explains contracted colors.toml-era Omarchy requirement"
 }
 
 test_thpm_help() {
@@ -1101,6 +1212,7 @@ test_install_preserves_disabled_plugins_and_installs_files() {
   local installed_theme_set="$home_dir/.config/omarchy/hooks/theme-set"
   local installed_theme_env="$home_dir/.local/share/thpm/lib/theme-env.sh"
   local output
+  local status
 
   mkdir -p "$hook_dir" "$bin_dir" "$home_dir/.local/share/omarchy/bin"
   printf '#!/usr/bin/env bash\n' > "$legacy_thpm"
@@ -1115,9 +1227,13 @@ test_install_preserves_disabled_plugins_and_installs_files() {
   make_install_git_stub "$bin_dir"
 
   output="$(PATH="$bin_dir:$PATH" HOME="$home_dir" "$ROOT_DIR/install.sh" 2>&1)"
+  status=$?
 
+  assert_success "$status" "install exits successfully"
   assert_contains "$output" "Downloading thpm.." "install announces download"
   assert_contains "$output" "omarchy-hook theme-set" "install applies theme-set hook"
+  assert_eq "thpm" "$(install_git_branch)" "install defaults to release branch"
+  assert_eq "clone --branch thpm --depth 1 https://github.com/OldJobobo/theme-hook-plugin-manager.git /tmp/theme-hook" "$(install_git_args)" "install clones expected repository and destination"
   assert_file_executable "$installed_thpm" "install writes executable thpm"
   assert_file_missing "$legacy_thpm" "install removes legacy omarchy bin thpm"
   assert_file_missing "$installed_theme_set" "install removes old thpm theme-set dispatcher"
@@ -1127,12 +1243,164 @@ test_install_preserves_disabled_plugins_and_installs_files() {
   assert_file_exists "$hook_dir/30-vscode.sh" "install enables bundled plugins by default"
 }
 
+test_install_respects_branch_override() {
+  local home_dir="$TMP_ROOT/install-branch-home"
+  local bin_dir="$TMP_ROOT/install-branch-bin"
+  local status
+
+  rm -f "$TMP_ROOT/install-git-branch.log"
+  rm -f "$TMP_ROOT/install-git-args.log"
+  mkdir -p "$bin_dir" "$home_dir/.config/omarchy/hooks"
+  make_stub_bin "$bin_dir" pacman 'exit 0'
+  make_stub_bin "$bin_dir" sudo 'printf "sudo should not be called\n" >&2; exit 1'
+  make_stub_bin "$bin_dir" omarchy-hook 'exit 0'
+  make_stub_bin "$bin_dir" omarchy-show-done 'exit 0'
+  make_install_git_stub "$bin_dir"
+
+  THPM_BRANCH=test-branch PATH="$bin_dir:$PATH" HOME="$home_dir" "$ROOT_DIR/install.sh" >/dev/null 2>&1
+  status=$?
+
+  assert_success "$status" "install with branch override exits successfully"
+  assert_eq "test-branch" "$(install_git_branch)" "install honors THPM_BRANCH override"
+  assert_eq "clone --branch test-branch --depth 1 https://github.com/OldJobobo/theme-hook-plugin-manager.git /tmp/theme-hook" "$(install_git_args)" "install passes branch override to git clone"
+}
+
+test_install_preserves_existing_sample_disabled_plugin() {
+  local home_dir="$TMP_ROOT/install-sample-home"
+  local bin_dir="$TMP_ROOT/install-sample-bin"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local status
+
+  rm -f "$TMP_ROOT/install-git-branch.log"
+  rm -f "$TMP_ROOT/install-git-args.log"
+  mkdir -p "$hook_dir" "$bin_dir"
+  printf '#!/usr/bin/env bash\n' > "$hook_dir/30-vscode.sh.sample"
+  make_stub_bin "$bin_dir" pacman 'exit 0'
+  make_stub_bin "$bin_dir" sudo 'printf "sudo should not be called\n" >&2; exit 1'
+  make_stub_bin "$bin_dir" omarchy-hook 'exit 0'
+  make_stub_bin "$bin_dir" omarchy-show-done 'exit 0'
+  make_install_git_stub "$bin_dir"
+
+  PATH="$bin_dir:$PATH" HOME="$home_dir" "$ROOT_DIR/install.sh" >/dev/null 2>&1
+  status=$?
+
+  assert_success "$status" "install with existing sample exits successfully"
+  assert_file_exists "$hook_dir/30-vscode.sh.sample" "install preserves existing .sample disabled plugin"
+  assert_file_missing "$hook_dir/30-vscode.sh" "install keeps .sample plugin inactive"
+}
+
+test_install_disabled_sample_wins_over_stale_active_plugin() {
+  local home_dir="$TMP_ROOT/install-stale-active-home"
+  local bin_dir="$TMP_ROOT/install-stale-active-bin"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local status
+
+  rm -f "$TMP_ROOT/install-git-branch.log"
+  rm -f "$TMP_ROOT/install-git-args.log"
+  mkdir -p "$hook_dir" "$bin_dir"
+  printf '#!/usr/bin/env bash\nprintf disabled\n' > "$hook_dir/30-vscode.sh.sample"
+  printf '#!/usr/bin/env bash\nprintf stale-active\n' > "$hook_dir/30-vscode.sh"
+  make_stub_bin "$bin_dir" pacman 'exit 0'
+  make_stub_bin "$bin_dir" sudo 'printf "sudo should not be called\n" >&2; exit 1'
+  make_stub_bin "$bin_dir" omarchy-hook 'exit 0'
+  make_stub_bin "$bin_dir" omarchy-show-done 'exit 0'
+  make_install_git_stub "$bin_dir"
+
+  PATH="$bin_dir:$PATH" HOME="$home_dir" "$ROOT_DIR/install.sh" >/dev/null 2>&1
+  status=$?
+
+  assert_success "$status" "install with disabled sample and stale active hook exits successfully"
+  assert_file_exists "$hook_dir/30-vscode.sh.sample" "install keeps bundled plugin disabled when sample exists"
+  assert_file_missing "$hook_dir/30-vscode.sh" "install removes stale active copy for disabled plugin"
+  assert_not_contains "$(cat "$hook_dir/30-vscode.sh.sample")" "stale-active" "install replaces stale active hook with bundled hook"
+}
+
+test_install_preserves_custom_omarchy_hook() {
+  local home_dir="$TMP_ROOT/install-custom-home"
+  local bin_dir="$TMP_ROOT/install-custom-bin"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local custom_hook="$hook_dir/99-custom.sh"
+  local status
+
+  rm -f "$TMP_ROOT/install-git-branch.log"
+  rm -f "$TMP_ROOT/install-git-args.log"
+  mkdir -p "$hook_dir" "$bin_dir"
+  printf '#!/usr/bin/env bash\nprintf custom\n' > "$custom_hook"
+  make_stub_bin "$bin_dir" pacman 'exit 0'
+  make_stub_bin "$bin_dir" sudo 'printf "sudo should not be called\n" >&2; exit 1'
+  make_stub_bin "$bin_dir" omarchy-hook 'exit 0'
+  make_stub_bin "$bin_dir" omarchy-show-done 'exit 0'
+  make_install_git_stub "$bin_dir"
+
+  PATH="$bin_dir:$PATH" HOME="$home_dir" "$ROOT_DIR/install.sh" >/dev/null 2>&1
+  status=$?
+
+  assert_success "$status" "install with custom hook exits successfully"
+  assert_file_exists "$custom_hook" "install preserves custom Omarchy hook"
+  assert_eq '#!/usr/bin/env bash
+printf custom' "$(cat "$custom_hook")" "install preserves custom hook contents"
+}
+
+test_install_preserves_custom_sample_hook() {
+  local home_dir="$TMP_ROOT/install-custom-sample-home"
+  local bin_dir="$TMP_ROOT/install-custom-sample-bin"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local custom_hook="$hook_dir/99-custom.sh.sample"
+  local status
+
+  rm -f "$TMP_ROOT/install-git-branch.log"
+  rm -f "$TMP_ROOT/install-git-args.log"
+  mkdir -p "$hook_dir" "$bin_dir"
+  printf '#!/usr/bin/env bash\nprintf custom-sample\n' > "$custom_hook"
+  make_stub_bin "$bin_dir" pacman 'exit 0'
+  make_stub_bin "$bin_dir" sudo 'printf "sudo should not be called\n" >&2; exit 1'
+  make_stub_bin "$bin_dir" omarchy-hook 'exit 0'
+  make_stub_bin "$bin_dir" omarchy-show-done 'exit 0'
+  make_install_git_stub "$bin_dir"
+
+  PATH="$bin_dir:$PATH" HOME="$home_dir" "$ROOT_DIR/install.sh" >/dev/null 2>&1
+  status=$?
+
+  assert_success "$status" "install with custom sample hook exits successfully"
+  assert_file_exists "$custom_hook" "install preserves custom .sample hook"
+  assert_eq '#!/usr/bin/env bash
+printf custom-sample' "$(cat "$custom_hook")" "install preserves custom .sample hook contents"
+  assert_file_missing "$hook_dir/99-custom.sh" "install does not activate custom .sample hook"
+}
+
+test_install_preserves_user_theme_set_hook() {
+  local home_dir="$TMP_ROOT/install-user-theme-set-home"
+  local bin_dir="$TMP_ROOT/install-user-theme-set-bin"
+  local theme_set="$home_dir/.config/omarchy/hooks/theme-set"
+  local status
+
+  rm -f "$TMP_ROOT/install-git-branch.log"
+  rm -f "$TMP_ROOT/install-git-args.log"
+  mkdir -p "$bin_dir" "$(dirname "$theme_set")"
+  printf '#!/usr/bin/env bash\nprintf user-hook\n' > "$theme_set"
+  make_stub_bin "$bin_dir" pacman 'exit 0'
+  make_stub_bin "$bin_dir" sudo 'printf "sudo should not be called\n" >&2; exit 1'
+  make_stub_bin "$bin_dir" omarchy-hook 'exit 0'
+  make_stub_bin "$bin_dir" omarchy-show-done 'exit 0'
+  make_install_git_stub "$bin_dir"
+
+  PATH="$bin_dir:$PATH" HOME="$home_dir" "$ROOT_DIR/install.sh" >/dev/null 2>&1
+  status=$?
+
+  assert_success "$status" "install with user theme-set hook exits successfully"
+  assert_file_exists "$theme_set" "install preserves user theme-set hook"
+  assert_contains "$(cat "$theme_set")" "user-hook" "install preserves user theme-set hook contents"
+}
+
 test_install_interactive_prompt_installs_missing_adw_theme() {
   local home_dir="$TMP_ROOT/install-interactive-home"
   local bin_dir="$TMP_ROOT/install-interactive-bin"
   local sudo_log="$TMP_ROOT/install-interactive-sudo.log"
   local output
+  local status
 
+  rm -f "$TMP_ROOT/install-git-branch.log"
+  rm -f "$TMP_ROOT/install-git-args.log"
   mkdir -p "$bin_dir" "$home_dir/.config/omarchy/hooks"
   make_stub_bin "$bin_dir" pacman 'exit 1'
   cat > "$bin_dir/sudo" <<EOF
@@ -1145,7 +1413,9 @@ EOF
   make_install_git_stub "$bin_dir"
 
   output="$(printf 'y\n' | PATH="$bin_dir:/bin" HOME="$home_dir" "$ROOT_DIR/install.sh" 2>&1)"
+  status=$?
 
+  assert_success "$status" "interactive install exits successfully"
   assert_contains "$output" "\"adw-gtk-theme\" is required to theme GTK applications." "install interactive path explains missing GTK theme"
   assert_file_exists "$sudo_log" "install interactive path invokes sudo when confirmed"
   assert_eq "pacman -S adw-gtk-theme" "$(cat "$sudo_log")" "install interactive path installs adw-gtk-theme"
@@ -1157,7 +1427,10 @@ test_install_gum_prompt_installs_missing_adw_theme() {
   local bin_dir="$TMP_ROOT/install-gum-bin"
   local sudo_log="$TMP_ROOT/install-gum-sudo.log"
   local gum_log="$TMP_ROOT/install-gum.log"
+  local status
 
+  rm -f "$TMP_ROOT/install-git-branch.log"
+  rm -f "$TMP_ROOT/install-git-args.log"
   mkdir -p "$bin_dir" "$home_dir/.config/omarchy/hooks"
   make_stub_bin "$bin_dir" pacman 'exit 1'
   cat > "$bin_dir/gum" <<EOF
@@ -1177,7 +1450,9 @@ EOF
   make_install_git_stub "$bin_dir"
 
   PATH="$bin_dir:/bin" HOME="$home_dir" "$ROOT_DIR/install.sh" >/dev/null 2>&1
+  status=$?
 
+  assert_success "$status" "gum install exits successfully"
   assert_contains "$(cat "$gum_log")" "style --border normal" "install gum path renders warning"
   assert_contains "$(cat "$gum_log")" "confirm Would you like to install \"adw-gtk-theme\"?" "install gum path asks for confirmation"
   assert_eq "pacman -S adw-gtk-theme" "$(cat "$sudo_log")" "install gum path installs adw-gtk-theme"
@@ -1304,6 +1579,8 @@ print_coverage_summary() {
 
 main() {
   test_shell_syntax
+  test_installer_bundled_plugin_inventory_matches_hooks
+  test_project_omarchy_default_contract
   test_thpm_help
   test_thpm_enable_disable_and_list
   test_thpm_aliases
@@ -1336,6 +1613,12 @@ main() {
   test_vscode_plugin_patches_extension_manifest_and_installs_theme
   test_theme_set_extracts_colors_with_leading_whitespace_and_comments
   test_install_preserves_disabled_plugins_and_installs_files
+  test_install_respects_branch_override
+  test_install_preserves_existing_sample_disabled_plugin
+  test_install_disabled_sample_wins_over_stale_active_plugin
+  test_install_preserves_custom_omarchy_hook
+  test_install_preserves_custom_sample_hook
+  test_install_preserves_user_theme_set_hook
   test_install_interactive_prompt_installs_missing_adw_theme
   test_install_gum_prompt_installs_missing_adw_theme
   test_uninstall_removes_files_and_qutebrowser_theme

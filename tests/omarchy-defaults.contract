@@ -1,0 +1,13 @@
+# Omarchy defaults this project currently depends on.
+# If Omarchy changes any of these conventions, update this file first, then fix
+# the scripts and docs until tests pass again.
+HOOK_DIR=.config/omarchy/hooks/theme-set.d
+THEME_DIR=.config/omarchy/current/theme
+COLORS_FILE=.config/omarchy/current/theme/colors.toml
+LIGHT_MODE_FILE=.config/omarchy/current/theme/light.mode
+THEME_NAME_FILE=.config/omarchy/current/theme.name
+THEME_STORE_DIR=.config/omarchy/themes
+HOOK_NAME=theme-set
+LEGACY_DISPATCHER=.config/omarchy/hooks/theme-set
+LEGACY_BIN_DIR=.local/share/omarchy/bin
+SHARED_RUNTIME=.local/share/thpm/lib/theme-env.sh
