@@ -128,6 +128,7 @@ Then manage it by name:
 thpm list
 thpm enable myapp
 thpm disable myapp
+thpm doctor myapp
 thpm run
 ```
 
@@ -140,3 +141,16 @@ thpm run
 ```
 
 This matches Omarchy 3.3+ themes.
+
+## Doctor Checks
+
+`thpm doctor` is read-only. It checks the Omarchy hook directory, the shared
+runtime, the active `colors.toml`, enabled hook syntax, and common app-specific
+requirements.
+
+For custom plugins, doctor can diagnose more accurately when the plugin:
+
+- uses the numeric filename convention, such as `50-myapp.sh`
+- sources `${THPM_THEME_ENV:-$HOME/.local/share/thpm/lib/theme-env.sh}`
+- uses `skipped "Name"` for optional missing apps or files
+- keeps generated files in predictable app config paths

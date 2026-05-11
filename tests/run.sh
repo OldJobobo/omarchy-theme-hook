@@ -334,6 +334,7 @@ test_thpm_help() {
   output="$(run_thpm "$home_dir" help)"
 
   assert_contains "$output" "Usage: thpm [command] [plugin]" "thpm help prints usage"
+  assert_contains "$output" "doctor" "thpm help lists doctor command"
   assert_contains "$output" "enable" "thpm help lists enable command"
   assert_contains "$output" "disable" "thpm help lists disable command"
 }
@@ -471,6 +472,107 @@ test_thpm_aliases() {
 
   output="$(run_thpm_with_path "$home_dir" "$bin_dir" rm)"
   assert_contains "$output" "raw.githubusercontent.com/OldJobobo/theme-hook-plugin-manager/thpm/uninstall.sh" "thpm rm aliases uninstall"
+}
+
+test_thpm_doctor_reports_missing_colors() {
+  local home_dir="$TMP_ROOT/doctor-missing-colors-home"
+  local bin_dir="$TMP_ROOT/doctor-missing-colors-bin"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local output
+  local status
+
+  mkdir -p "$hook_dir" "$bin_dir"
+  make_stub_bin "$bin_dir" omarchy-hook 'exit 0'
+
+  set +e
+  output="$(PATH="$bin_dir:$PATH" THPM_THEME_ENV="$ROOT_DIR/lib/theme-env.sh" HOME="$home_dir" "$ROOT_DIR/thpm" doctor 2>&1)"
+  status=$?
+  set +e
+
+  assert_eq "1" "$status" "thpm doctor exits non-zero when colors.toml is missing"
+  assert_contains "$output" "THPM Doctor" "thpm doctor prints report title"
+  assert_contains "$output" "colors.toml missing" "thpm doctor reports missing colors.toml"
+}
+
+test_thpm_doctor_warns_for_missing_plugin_command() {
+  local home_dir="$TMP_ROOT/doctor-plugin-command-home"
+  local bin_dir="$TMP_ROOT/doctor-plugin-command-bin"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local output
+  local status
+
+  write_colors_fixture "$home_dir"
+  mkdir -p "$hook_dir" "$bin_dir"
+  printf '#!/usr/bin/env bash\nsource "${THPM_THEME_ENV:-$HOME/.local/share/thpm/lib/theme-env.sh}"\n' > "$hook_dir/10-spotify.sh"
+  make_stub_bin "$bin_dir" omarchy-hook 'exit 0'
+
+  set +e
+  output="$(PATH="$bin_dir:$PATH" THPM_THEME_ENV="$ROOT_DIR/lib/theme-env.sh" HOME="$home_dir" "$ROOT_DIR/thpm" doctor 2>&1)"
+  status=$?
+  set +e
+
+  assert_eq "0" "$status" "thpm doctor exits successfully with warnings only"
+  assert_contains "$output" "spotify:" "thpm doctor checks enabled spotify plugin"
+  assert_contains "$output" "Spicetify command missing" "thpm doctor warns about missing plugin command"
+  assert_contains "$output" "0 error(s)" "thpm doctor summarizes warnings without errors"
+}
+
+test_thpm_doctor_reports_broken_hook_syntax() {
+  local home_dir="$TMP_ROOT/doctor-broken-hook-home"
+  local bin_dir="$TMP_ROOT/doctor-broken-hook-bin"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local output
+  local status
+
+  write_colors_fixture "$home_dir"
+  mkdir -p "$hook_dir" "$bin_dir"
+  printf '#!/usr/bin/env bash\nif true\n' > "$hook_dir/99-broken.sh"
+  make_stub_bin "$bin_dir" omarchy-hook 'exit 0'
+
+  set +e
+  output="$(PATH="$bin_dir:$PATH" THPM_THEME_ENV="$ROOT_DIR/lib/theme-env.sh" HOME="$home_dir" "$ROOT_DIR/thpm" doctor 2>&1)"
+  status=$?
+  set +e
+
+  assert_eq "1" "$status" "thpm doctor exits non-zero for broken hook syntax"
+  assert_contains "$output" "broken:" "thpm doctor names broken hook"
+  assert_contains "$output" "shell syntax fails" "thpm doctor reports hook syntax failure"
+}
+
+test_thpm_doctor_reports_firefox_profile_issue() {
+  local home_dir="$TMP_ROOT/doctor-firefox-home"
+  local bin_dir="$TMP_ROOT/doctor-firefox-bin"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local output
+
+  write_colors_fixture "$home_dir"
+  mkdir -p "$hook_dir" "$bin_dir"
+  cp "$ROOT_DIR/theme-set.d/40-firefox.sh" "$hook_dir/40-firefox.sh"
+  make_stub_bin "$bin_dir" omarchy-hook 'exit 0'
+  make_stub_bin "$bin_dir" firefox 'exit 0'
+
+  output="$(PATH="$bin_dir:$PATH" THPM_THEME_ENV="$ROOT_DIR/lib/theme-env.sh" HOME="$home_dir" "$ROOT_DIR/thpm" doctor firefox 2>&1)"
+
+  assert_contains "$output" "firefox:" "thpm doctor checks requested firefox plugin"
+  assert_contains "$output" "Firefox profiles.ini missing" "thpm doctor reports missing firefox profile"
+}
+
+test_thpm_doctor_limits_plugin_specific_checks() {
+  local home_dir="$TMP_ROOT/doctor-specific-home"
+  local bin_dir="$TMP_ROOT/doctor-specific-bin"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local output
+
+  write_colors_fixture "$home_dir"
+  mkdir -p "$hook_dir" "$bin_dir"
+  printf '#!/usr/bin/env bash\nsource "${THPM_THEME_ENV:-$HOME/.local/share/thpm/lib/theme-env.sh}"\n' > "$hook_dir/10-spotify.sh"
+  printf '#!/usr/bin/env bash\nsource "${THPM_THEME_ENV:-$HOME/.local/share/thpm/lib/theme-env.sh}"\n' > "$hook_dir/40-firefox.sh"
+  make_stub_bin "$bin_dir" omarchy-hook 'exit 0'
+
+  output="$(PATH="$bin_dir:$PATH" THPM_THEME_ENV="$ROOT_DIR/lib/theme-env.sh" HOME="$home_dir" "$ROOT_DIR/thpm" doctor spotify 2>&1)"
+
+  assert_contains "$output" "spotify:" "thpm doctor checks requested plugin"
+  assert_not_contains "$output" "firefox:" "thpm doctor does not check unrelated plugins when a plugin is requested"
 }
 
 test_thpm_open_uses_xdg_open_for_hook_dir() {
@@ -1491,6 +1593,65 @@ test_install_recovers_all_bundled_plugins_disabled_by_bad_update() {
   assert_file_missing "$hook_dir/40-zen.sh.sample" "install clears zen sample after all-disabled update fallout"
 }
 
+test_install_recovery_preserves_custom_sample_hooks() {
+  local home_dir="$TMP_ROOT/install-all-disabled-custom-home"
+  local bin_dir="$TMP_ROOT/install-all-disabled-custom-bin"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local hook
+  local status
+
+  rm -f "$TMP_ROOT/install-git-branch.log"
+  rm -f "$TMP_ROOT/install-git-args.log"
+  mkdir -p "$hook_dir" "$bin_dir"
+  for hook in "$ROOT_DIR"/theme-set.d/*.sh; do
+    printf '#!/usr/bin/env bash\n' > "$hook_dir/$(basename "$hook").sample"
+  done
+  printf '#!/usr/bin/env bash\nprintf custom\n' > "$hook_dir/99-custom.sh.sample"
+  make_stub_bin "$bin_dir" pacman 'exit 0'
+  make_stub_bin "$bin_dir" sudo 'printf "sudo should not be called\n" >&2; exit 1'
+  make_stub_bin "$bin_dir" omarchy-hook 'exit 0'
+  make_stub_bin "$bin_dir" omarchy-show-done 'exit 0'
+  make_install_git_stub "$bin_dir"
+
+  PATH="$bin_dir:$PATH" HOME="$home_dir" "$ROOT_DIR/install.sh" >/dev/null 2>&1
+  status=$?
+
+  assert_success "$status" "install recovers all-disabled state with custom sample successfully"
+  assert_file_exists "$hook_dir/40-zen.sh" "install re-enables bundled hooks with custom sample present"
+  assert_file_missing "$hook_dir/40-zen.sh.sample" "install removes bundled sample with custom sample present"
+  assert_file_exists "$hook_dir/99-custom.sh.sample" "install preserves custom sample during all-disabled recovery"
+  assert_file_missing "$hook_dir/99-custom.sh" "install does not activate custom sample during all-disabled recovery"
+}
+
+test_install_preserves_mixed_enabled_and_disabled_state() {
+  local home_dir="$TMP_ROOT/install-mixed-state-home"
+  local bin_dir="$TMP_ROOT/install-mixed-state-bin"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local output
+  local status
+
+  rm -f "$TMP_ROOT/install-git-branch.log"
+  rm -f "$TMP_ROOT/install-git-args.log"
+  mkdir -p "$hook_dir" "$bin_dir"
+  printf '#!/usr/bin/env bash\n' > "$hook_dir/00-fish.sh"
+  chmod 644 "$hook_dir/00-fish.sh"
+  printf '#!/usr/bin/env bash\n' > "$hook_dir/30-vscode.sh.sample"
+  make_stub_bin "$bin_dir" pacman 'exit 0'
+  make_stub_bin "$bin_dir" sudo 'printf "sudo should not be called\n" >&2; exit 1'
+  make_stub_bin "$bin_dir" omarchy-hook 'exit 0'
+  make_stub_bin "$bin_dir" omarchy-show-done 'exit 0'
+  make_install_git_stub "$bin_dir"
+
+  output="$(PATH="$bin_dir:$PATH" HOME="$home_dir" "$ROOT_DIR/install.sh" 2>&1)"
+  status=$?
+
+  assert_success "$status" "install preserves mixed enabled and disabled state successfully"
+  assert_not_contains "$output" "All bundled plugins are disabled" "install does not recover when any bundled hook is enabled"
+  assert_file_exists "$hook_dir/00-fish.sh" "install preserves active bundled hook in mixed state"
+  assert_file_exists "$hook_dir/30-vscode.sh.sample" "install preserves disabled bundled hook in mixed state"
+  assert_file_missing "$hook_dir/30-vscode.sh" "install does not enable disabled bundled hook in mixed state"
+}
+
 test_install_respects_branch_override() {
   local home_dir="$TMP_ROOT/install-branch-home"
   local bin_dir="$TMP_ROOT/install-branch-bin"
@@ -1849,6 +2010,11 @@ main() {
   test_thpm_list_reports_available_update
   test_thpm_help_reports_cached_update_without_network
   test_thpm_aliases
+  test_thpm_doctor_reports_missing_colors
+  test_thpm_doctor_warns_for_missing_plugin_command
+  test_thpm_doctor_reports_broken_hook_syntax
+  test_thpm_doctor_reports_firefox_profile_issue
+  test_thpm_doctor_limits_plugin_specific_checks
   test_thpm_open_uses_xdg_open_for_hook_dir
   test_thpm_gtk_post_enable_disable_updates_gsettings
   test_theme_set_exports_colors_and_runs_enabled_hooks
@@ -1883,6 +2049,8 @@ main() {
   test_install_preserves_disabled_plugins_and_installs_files
   test_install_keeps_non_executable_hooks_enabled
   test_install_recovers_all_bundled_plugins_disabled_by_bad_update
+  test_install_recovery_preserves_custom_sample_hooks
+  test_install_preserves_mixed_enabled_and_disabled_state
   test_install_respects_branch_override
   test_install_preserves_existing_sample_disabled_plugin
   test_install_disabled_sample_wins_over_stale_active_plugin

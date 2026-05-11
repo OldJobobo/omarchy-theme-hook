@@ -81,6 +81,7 @@ Some apps also require one-time selection of the generated Omarchy theme inside 
 thpm list
 thpm enable firefox
 thpm disable spotify
+thpm doctor
 thpm run
 thpm open
 thpm update
@@ -92,6 +93,7 @@ thpm remove
 | `thpm list` | Show enabled and disabled plugins |
 | `thpm enable <name>` | Enable a plugin |
 | `thpm disable <name>` | Disable a plugin |
+| `thpm doctor [name]` | Diagnose thpm setup and plugin theming issues |
 | `thpm run` | Ask Omarchy to fire the `theme-set` hook now |
 | `thpm open` | Open the plugin directory |
 | `thpm update` | Re-run the installer |
@@ -148,6 +150,18 @@ The uninstaller removes `thpm`, bundled plugins, the shared runtime, and generat
 ## Troubleshooting
 
 ### A plugin is not changing an app
+
+Run the doctor first:
+
+```bash
+thpm doctor
+```
+
+For a single plugin:
+
+```bash
+thpm doctor firefox
+```
 
 Check that the plugin is enabled:
 

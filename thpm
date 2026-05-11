@@ -5,6 +5,8 @@ THPM_STATE_DIR="${THPM_STATE_DIR:-$HOME/.local/share/thpm}"
 THPM_VERSION_FILE="${THPM_VERSION_FILE:-$THPM_STATE_DIR/version}"
 THPM_UPDATE_CACHE="${THPM_UPDATE_CACHE:-$THPM_STATE_DIR/update-check}"
 THPM_UPDATE_CHECK_INTERVAL="${THPM_UPDATE_CHECK_INTERVAL:-86400}"
+THPM_THEME_ENV_DEFAULT="${THPM_THEME_ENV:-$HOME/.local/share/thpm/lib/theme-env.sh}"
+THPM_COLORS_FILE_DEFAULT="${THPM_COLORS_FILE:-$HOME/.config/omarchy/current/theme/colors.toml}"
 
 dot() {
     dot_char=" "
@@ -294,11 +296,425 @@ th_uninstall() {
     curl -fsSL https://raw.githubusercontent.com/OldJobobo/theme-hook-plugin-manager/thpm/uninstall.sh | bash
 }
 
+doctor_errors=0
+doctor_warnings=0
+
+doctor_status() {
+    local level="$1"
+    local message="$2"
+    local color
+
+    case "$level" in
+        ok) color="green" ;;
+        warn) color="yellow"; doctor_warnings=$((doctor_warnings + 1)) ;;
+        error) color="red"; doctor_errors=$((doctor_errors + 1)) ;;
+        *) color="cyan" ;;
+    esac
+
+    if [[ "$level" == "error" ]]; then
+        printf ' %b%s\n' "\e[31m \e[0m" "$message"
+    else
+        printf ' %s%s\n' "$(dot "$color")" "$message"
+    fi
+}
+
+doctor_ok() {
+    doctor_status ok "$1"
+}
+
+doctor_warn() {
+    doctor_status warn "$1"
+}
+
+doctor_error() {
+    doctor_status error "$1"
+}
+
+doctor_info() {
+    doctor_status info "$1"
+}
+
+doctor_name_from_path() {
+    local path="$1"
+    local name
+
+    name=$(basename "$path")
+    name=${name%.sample}
+    name=${name%.sh}
+    name=${name#*-}
+    printf '%s\n' "$name"
+}
+
+doctor_find_plugin() {
+    local plugin="$1"
+    local hook
+
+    [[ -d "$HOOK_DIR" ]] || return 1
+    for hook in "$HOOK_DIR"/*.sh "$HOOK_DIR"/*.sh.sample; do
+        [[ -f "$hook" ]] || continue
+        if [[ "$(doctor_name_from_path "$hook")" == "$plugin" ]]; then
+            printf '%s\n' "$hook"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+doctor_check_command() {
+    local command_name="$1"
+    local display_name="${2:-$command_name}"
+
+    if command -v "$command_name" >/dev/null 2>&1; then
+        doctor_ok "$display_name command found"
+    else
+        doctor_warn "$display_name command missing"
+    fi
+}
+
+doctor_check_file() {
+    local file="$1"
+    local display_name="$2"
+
+    if [[ -f "$file" ]]; then
+        doctor_ok "$display_name found: $file"
+    else
+        doctor_warn "$display_name missing: $file"
+    fi
+}
+
+doctor_check_dir() {
+    local dir="$1"
+    local display_name="$2"
+
+    if [[ -d "$dir" ]]; then
+        doctor_ok "$display_name found: $dir"
+    else
+        doctor_warn "$display_name missing: $dir"
+    fi
+}
+
+doctor_check_colors() {
+    local colors_file="$THPM_COLORS_FILE_DEFAULT"
+    local key
+    local value
+    local missing=0
+    local keys=(
+        background foreground cursor selection_foreground selection_background
+        color0 color1 color2 color3 color4 color5 color6 color7
+        color8 color9 color10 color11 color12 color13 color14 color15
+    )
+
+    if [[ ! -f "$colors_file" ]]; then
+        doctor_error "colors.toml missing: $colors_file"
+        return 1
+    fi
+
+    doctor_ok "colors.toml found: $colors_file"
+    for key in "${keys[@]}"; do
+        value=$(awk -v color="$key" '
+            $1 == color && /=/ {
+                if (match($0, /#([0-9a-fA-F]{6})/)) {
+                    print substr($0, RSTART + 1, 6)
+                    exit
+                }
+            }
+        ' "$colors_file")
+        if [[ ! "$value" =~ ^[0-9a-fA-F]{6}$ ]]; then
+            doctor_error "colors.toml is missing valid $key"
+            missing=1
+        fi
+    done
+
+    [[ "$missing" -eq 0 ]] && doctor_ok "colors.toml has required Omarchy color keys"
+}
+
+doctor_check_browser_profile() {
+    local browser="$1"
+    local base_dir="$2"
+    local profiles_file="$base_dir/profiles.ini"
+    local default_profile
+    local prefs_file
+
+    if [[ ! -f "$profiles_file" ]]; then
+        doctor_warn "$browser profiles.ini missing: $profiles_file"
+        return 0
+    fi
+
+    default_profile=$(awk -F= '
+        /^\[Install/ { in_install=1 }
+        in_install && /^Default=/ { print $2; exit }
+    ' "$profiles_file")
+    if [[ -z "$default_profile" || ! -d "$base_dir/$default_profile" ]]; then
+        doctor_warn "$browser default profile was not found"
+        return 0
+    fi
+
+    doctor_ok "$browser default profile found: $base_dir/$default_profile"
+    prefs_file="$base_dir/$default_profile/prefs.js"
+    if [[ -f "$prefs_file" ]] && grep -q 'toolkit.legacyUserProfileCustomizations.stylesheets", false' "$prefs_file"; then
+        doctor_warn "$browser userChrome preference is disabled in prefs.js"
+    else
+        doctor_ok "$browser userChrome preference is enabled or can be written"
+    fi
+}
+
+doctor_check_editor_theme_extension() {
+    local name="$1"
+    local command_name="$2"
+    local extension_root="$3"
+
+    doctor_check_command "$command_name" "$name"
+    doctor_check_command jq jq
+    if [[ -f "$HOME/.config/omarchy/current/theme/vscode.json" ]]; then
+        doctor_info "$name uses current theme vscode.json; generated Base16 extension patch is skipped"
+        return 0
+    fi
+
+    if compgen -G "$extension_root/tintedtheming.base16-tinted-themes-*" >/dev/null; then
+        doctor_ok "$name Base16 Tinted Themes extension directory found"
+    else
+        doctor_warn "$name Base16 Tinted Themes extension directory missing under $extension_root"
+    fi
+}
+
+doctor_check_plugin_specific() {
+    local plugin="$1"
+
+    case "$plugin" in
+        fish|fzf) doctor_check_command fish Fish ;;
+        discord)
+            doctor_info "Discord/Vencord themes must be enabled inside the client after generation"
+            if compgen -G "$HOME/.config/Vencord/themes" >/dev/null ||
+               compgen -G "$HOME/.config/vesktop/themes" >/dev/null ||
+               compgen -G "$HOME/.config/Equicord/themes" >/dev/null ||
+               compgen -G "$HOME/.config/equibop/themes" >/dev/null ||
+               compgen -G "$HOME/.var/app/com.discordapp.Discord/config/Vencord/themes" >/dev/null ||
+               compgen -G "$HOME/.var/app/dev.vencord.Vesktop/config/vesktop/themes" >/dev/null ||
+               compgen -G "$HOME/.var/app/io.github.equicord.equibop/config/equibop/themes" >/dev/null; then
+                doctor_ok "Discord/Vencord theme directory found"
+            else
+                doctor_warn "Discord/Vencord theme directory missing"
+            fi
+        ;;
+        gtk)
+            doctor_check_command gsettings gsettings
+            if command -v pacman >/dev/null 2>&1; then
+                if pacman -Qi adw-gtk-theme >/dev/null 2>&1; then
+                    doctor_ok "adw-gtk-theme package installed"
+                else
+                    doctor_warn "adw-gtk-theme package missing"
+                fi
+            else
+                doctor_info "pacman not found; skipping adw-gtk-theme package check"
+            fi
+        ;;
+        qt6ct) doctor_check_command qt6ct Qt6ct ;;
+        spotify)
+            doctor_check_command spicetify Spicetify
+            doctor_check_dir "$HOME/.config/spicetify" "Spicetify config directory"
+        ;;
+        superfile) doctor_check_command spf Superfile ;;
+        tmux)
+            doctor_check_command tmux tmux
+            doctor_check_file "$HOME/.config/omarchy/current/theme/tmux.conf" "Omarchy tmux theme"
+        ;;
+        vicinae) doctor_check_command vicinae Vicinae ;;
+        typora) doctor_check_command typora Typora ;;
+        nwg-dock-hyprland) doctor_check_command nwg-dock-hyprland "nwg-dock-hyprland" ;;
+        zed)
+            if command -v zeditor >/dev/null 2>&1 || command -v zed >/dev/null 2>&1; then
+                doctor_ok "Zed command found"
+            else
+                doctor_warn "Zed command missing"
+            fi
+        ;;
+        swaync)
+            doctor_check_command swaync SwayNC
+            doctor_check_command swaync-client swaync-client
+            doctor_check_file "$HOME/.config/omarchy/current/theme/colors.css" "SwayNC colors.css"
+        ;;
+        foot-live-colors) doctor_check_file "$HOME/.config/omarchy/current/theme/foot.ini" "Omarchy Foot theme" ;;
+        vscode) doctor_check_editor_theme_extension "VS Code" code "$HOME/.vscode/extensions" ;;
+        cursor) doctor_check_editor_theme_extension Cursor cursor "$HOME/.cursor/extensions" ;;
+        windsurf) doctor_check_editor_theme_extension Windsurf windsurf "$HOME/.windsurf/extensions" ;;
+        obsidian-terminal)
+            doctor_check_command python3 "Python 3"
+            if [[ -n "${OBSIDIAN_TERMINAL_DATA_JSON:-}${OBSIDIAN_TERMINAL_DATA:-}${OBSIDIAN_VAULT_PATH:-}${OBSIDIAN_VAULT:-}" ]]; then
+                doctor_ok "Obsidian Terminal override environment is set"
+            elif compgen -G "$HOME/.config/obsidian/obsidian.json" >/dev/null ||
+                 compgen -G "$HOME/Documents/*/.obsidian/plugins/terminal/data.json" >/dev/null ||
+                 compgen -G "$HOME/Notes/*/.obsidian/plugins/terminal/data.json" >/dev/null; then
+                doctor_ok "Obsidian vault/plugin data can likely be discovered"
+            else
+                doctor_warn "Obsidian Terminal data.json not discovered; set OBSIDIAN_VAULT_PATH or OBSIDIAN_TERMINAL_DATA_JSON"
+            fi
+        ;;
+        cava) doctor_check_command cava Cava ;;
+        firefox)
+            doctor_check_command firefox Firefox
+            doctor_check_browser_profile Firefox "$HOME/.mozilla/firefox"
+        ;;
+        qutebrowser) doctor_check_command qutebrowser Qutebrowser ;;
+        steam)
+            doctor_check_command steam Steam
+            doctor_check_command python "Python 3"
+            doctor_check_command git Git
+        ;;
+        zen)
+            doctor_check_command zen-browser "Zen Browser"
+            doctor_check_browser_profile "Zen Browser" "$HOME/.zen"
+        ;;
+        cliamp) doctor_check_command cliamp cliamp ;;
+        heroic) doctor_check_command heroic "Heroic Launcher" ;;
+        *) doctor_info "No plugin-specific doctor checks for $plugin" ;;
+    esac
+}
+
+doctor_check_plugin() {
+    local hook="$1"
+    local plugin
+    local base
+
+    plugin="$(doctor_name_from_path "$hook")"
+    base="$(basename "$hook")"
+
+    echo
+    echo "$plugin:"
+    if [[ "$hook" == *.sample ]]; then
+        doctor_info "disabled: $hook"
+        return 0
+    fi
+
+    doctor_ok "enabled: $hook"
+    if [[ "$base" =~ ^[0-9]+-.+\.sh$ ]]; then
+        doctor_ok "filename has numeric ordering prefix"
+    else
+        doctor_warn "filename should use numeric prefix and .sh suffix: $base"
+    fi
+
+    if bash -n "$hook" >/dev/null 2>&1; then
+        doctor_ok "shell syntax passes"
+    else
+        doctor_error "shell syntax fails: $hook"
+    fi
+
+    if grep -Eq 'THPM_THEME_ENV|/\.local/share/thpm/lib/theme-env\.sh' "$hook"; then
+        doctor_ok "sources shared thpm runtime"
+    else
+        doctor_warn "does not appear to source shared thpm runtime"
+    fi
+
+    doctor_check_plugin_specific "$plugin"
+}
+
+doctor_check_duplicates() {
+    local hook
+    local plugin
+    local seen=" "
+
+    [[ -d "$HOOK_DIR" ]] || return 0
+    for hook in "$HOOK_DIR"/*.sh "$HOOK_DIR"/*.sh.sample; do
+        [[ -f "$hook" ]] || continue
+        plugin="$(doctor_name_from_path "$hook")"
+        if [[ "$seen" == *" $plugin "* ]]; then
+            doctor_warn "duplicate plugin name detected: $plugin"
+        else
+            seen="$seen$plugin "
+        fi
+    done
+}
+
+doctor_system() {
+    local legacy_dispatcher="$HOME/.config/omarchy/hooks/theme-set"
+
+    echo
+    echo "System:"
+    if command -v thpm >/dev/null 2>&1 || [[ -x "$0" ]]; then
+        doctor_ok "thpm CLI found"
+    else
+        doctor_warn "thpm CLI is not on PATH"
+    fi
+
+    if command -v omarchy-hook >/dev/null 2>&1; then
+        doctor_ok "omarchy-hook command found"
+    else
+        doctor_error "omarchy-hook command missing; thpm run cannot fire theme-set"
+    fi
+
+    if [[ -d "$HOOK_DIR" ]]; then
+        doctor_ok "hook directory found: $HOOK_DIR"
+    else
+        doctor_error "hook directory missing: $HOOK_DIR"
+    fi
+
+    if [[ -f "$THPM_THEME_ENV_DEFAULT" ]]; then
+        doctor_ok "shared runtime found: $THPM_THEME_ENV_DEFAULT"
+    else
+        doctor_error "shared runtime missing: $THPM_THEME_ENV_DEFAULT"
+    fi
+
+    doctor_check_colors
+
+    if [[ -f "$legacy_dispatcher" ]]; then
+        if grep -Eq 'Omarchy 3\.3\+ uses colors\.toml|Compatibility shim for older thpm installs' "$legacy_dispatcher"; then
+            doctor_info "legacy theme-set dispatcher is a known thpm shim"
+        else
+            doctor_warn "custom legacy theme-set dispatcher exists: $legacy_dispatcher"
+        fi
+    fi
+
+    doctor_check_duplicates
+}
+
+th_doctor() {
+    local requested="${2:-}"
+    local hook
+
+    doctor_errors=0
+    doctor_warnings=0
+    echo "THPM Doctor"
+    doctor_system
+
+    echo
+    echo "Plugins:"
+    if [[ -n "$requested" ]]; then
+        hook="$(doctor_find_plugin "$requested")"
+        if [[ -z "$hook" ]]; then
+            doctor_error "plugin not found: $requested"
+        else
+            doctor_check_plugin "$hook"
+        fi
+    elif [[ -d "$HOOK_DIR" ]]; then
+        for hook in "$HOOK_DIR"/*.sh; do
+            [[ -f "$hook" ]] || continue
+            doctor_check_plugin "$hook"
+        done
+        for hook in "$HOOK_DIR"/*.sh.sample; do
+            [[ -f "$hook" ]] || continue
+            doctor_check_plugin "$hook"
+        done
+    fi
+
+    echo
+    echo "Summary:"
+    if [[ "$doctor_errors" -gt 0 ]]; then
+        doctor_error "$doctor_errors error(s), $doctor_warnings warning(s)"
+        return 1
+    fi
+    if [[ "$doctor_warnings" -gt 0 ]]; then
+        doctor_warn "0 error(s), $doctor_warnings warning(s)"
+        return 0
+    fi
+    doctor_ok "no issues found"
+}
+
 th_help() {
     echo -e "Usage: thpm [command] [plugin]"
     echo
     echo -e "Commands:"
     echo -e "$(dot "muted")  help       Show this help message"
+    echo -e "$(dot "muted")  doctor     Diagnose thpm and plugin theming issues"
     echo -e "$(dot "muted")  enable     Enable a plugin"
     echo -e "$(dot "muted")  disable    Disable a plugin"
     echo -e "$(dot "muted")  list       List all available plugins"
@@ -336,6 +752,9 @@ case $1 in
 
     run) th_run ;;
     r) th_run ;;
+
+    doctor) th_doctor "$@" ;;
+    doc) th_doctor "$@" ;;
 
     help) th_help ;;
     *) th_help; exit 0 ;;
