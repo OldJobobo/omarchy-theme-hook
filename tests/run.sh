@@ -929,6 +929,8 @@ EOF
   assert_file_exists "$profile_dir/chrome/thpm-zen-colors.css" "zen plugin writes managed colors file"
   assert_file_exists "$profile_dir/chrome/thpm-zen-userChrome.css" "zen plugin writes managed chrome stylesheet"
   assert_file_exists "$profile_dir/chrome/thpm-zen-userContent.css" "zen plugin writes managed content stylesheet"
+  assert_contains "$(cat "$profile_dir/chrome/thpm-zen-userChrome.css")" "#zen-sidebar-top-buttons" "zen plugin themes Zen sidebar top button container"
+  assert_contains "$(cat "$profile_dir/chrome/thpm-zen-userChrome.css")" "#zen-appcontent-wrapper" "zen plugin themes Zen browser frame container"
   assert_contains "$(cat "$user_chrome")" '/* THPM Zen hook start */' "zen plugin inserts managed userChrome import marker"
   assert_contains "$(cat "$user_chrome")" '@import url("./thpm-zen-colors.css");' "zen plugin imports managed colors directly from userChrome"
   assert_contains "$(cat "$user_chrome")" '@import url("./thpm-zen-userChrome.css");' "zen plugin imports managed userChrome stylesheet"

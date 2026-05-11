@@ -239,6 +239,56 @@ cat > "$managed_chrome_file" << 'EOF'
     --toolbarbutton-icon-fill: var(--base04) !important;
     --urlbarView-separator-color: var(--base01) !important;
     --urlbar-box-bgcolor: var(--base01) !important;
+    --lwt-accent-color: var(--base00) !important;
+    --lwt-text-color: var(--base05) !important;
+    --lwt-sidebar-background-color: var(--base00) !important;
+    --lwt-sidebar-text-color: var(--base05) !important;
+    --chrome-content-separator-color: var(--base00) !important;
+    --toolbox-bgcolor: var(--base00) !important;
+    --toolbox-textcolor: var(--base05) !important;
+    --toolbar-bgcolor: var(--base00) !important;
+    --toolbar-color: var(--base05) !important;
+    --toolbar-field-background-color: var(--base01) !important;
+    --toolbar-field-color: var(--base05) !important;
+    --zen-colors-primary: var(--base00) !important;
+    --zen-colors-secondary: var(--base01) !important;
+    --zen-colors-tertiary: var(--base02) !important;
+    --zen-colors-border: var(--base02) !important;
+    --zen-main-browser-background: var(--base00) !important;
+}
+
+#main-window,
+#main-window body,
+browser,
+#browser,
+#appcontent,
+#tabbrowser-tabbox,
+#tabbrowser-tabpanels,
+#zen-appcontent-wrapper {
+    background-color: var(--base00) !important;
+    color: var(--base05) !important;
+}
+
+#navigator-toolbox,
+#titlebar,
+#TabsToolbar,
+#toolbar-menubar,
+#nav-bar,
+#PersonalToolbar,
+#zen-sidebar-top-buttons,
+#zen-sidebar-foot-buttons {
+    background-color: var(--base00) !important;
+    color: var(--base05) !important;
+    border-color: var(--base02) !important;
+}
+
+#zen-sidebar-top-buttons toolbarbutton,
+#zen-sidebar-foot-buttons toolbarbutton,
+#nav-bar toolbarbutton,
+#TabsToolbar toolbarbutton {
+    background-color: transparent !important;
+    color: var(--base05) !important;
+    fill: var(--base04) !important;
 }
 
 /* Tabs colors  */
