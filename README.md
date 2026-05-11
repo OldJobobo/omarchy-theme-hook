@@ -191,6 +191,18 @@ Generated terminal or app theme files are not treated as the source of truth.
 
 Open `about:config`, set `toolkit.legacyUserProfileCustomizations.stylesheets` to `true`, and restart the browser. The plugin also needs a valid browser profile directory. The Zen plugin writes managed `thpm-zen-*.css` files and a marked import block; `thpm disable zen` removes those managed imports but does not change unrelated user CSS.
 
+For Zen-specific issues, run:
+
+```bash
+thpm update
+thpm run
+thpm doctor zen
+```
+
+`thpm doctor zen` checks the active Zen profile, the managed import block, the generated `thpm-zen-*.css` files, and whether the generated browser chrome stylesheet includes current Zen frame/topbar rules. If doctor reports stale frame CSS, run `thpm run` again and fully restart Zen.
+
+If doctor is clean but Zen is still only partially themed, open `about:profiles` in Zen and confirm the active profile path matches the profile shown by `thpm doctor zen`. If the paths match, the remaining unthemed area is likely a Zen UI surface outside Firefox userChrome CSS, such as native window decoration.
+
 ### Discord is not changing
 
 Use a Vencord-compatible client, such as Vesktop or Equibop, then enable the generated theme in that client's theme settings.
