@@ -2,19 +2,33 @@
 
 # Theme Hook Plugin Manager
 
-**Make your Omarchy theme follow you across the desktop.**
+**A small manager for Omarchy theme-change plugins.**
 
-`thpm` applies your current Omarchy colors to supported apps whenever you change themes.
+`thpm` installs and manages native Omarchy `theme-set.d` hook plugins. Omarchy runs the enabled hooks when the theme changes.
 
 </div>
 
-> **Not affiliated with Omarchy.** Theme Hook Plugin Manager is an independent project built for Omarchy users.
+> **Independent project.** Theme Hook Plugin Manager is built for Omarchy users, but it is not affiliated with Omarchy.
 
-## Why Use It
+## Overview
 
-Omarchy already gives you a strong system theme. `thpm` carries that theme into the apps that do not automatically follow it: browsers, editors, launchers, media apps, terminal tools, notification UI, and more.
+Omarchy runs `theme-set.d` hooks when the active theme changes. `thpm` manages those hook files as plugins: install them, list them, enable or disable them, and update them. When you run `thpm run`, it asks Omarchy to fire the `theme-set` hook; `thpm` does not dispatch plugin scripts itself.
 
-Install it once, keep the plugins you want enabled, and your apps update when your Omarchy theme changes. Apps you do not have installed are skipped.
+Most bundled plugins translate Omarchy theme data into app-specific config files, CSS files, editor themes, or live reload actions. The same plugin model can also handle other theme-change tasks, such as restarting a helper process, syncing generated files, or adapting app-specific settings.
+
+Color-focused plugins read the active Omarchy theme from:
+
+```text
+~/.config/omarchy/current/theme/colors.toml
+```
+
+Each integration is a normal shell plugin in:
+
+```text
+~/.config/omarchy/hooks/theme-set.d/
+```
+
+Enabled plugins end in `.sh`. Disabled plugins end in `.sh.sample`. Omarchy runs enabled hooks directly when the `theme-set` hook fires.
 
 ## Install
 
@@ -22,198 +36,98 @@ Install it once, keep the plugins you want enabled, and your apps update when yo
 curl -fsSL https://raw.githubusercontent.com/OldJobobo/theme-hook-plugin-manager/thpm/install.sh | bash
 ```
 
-The installer applies your current Omarchy theme after setup.
+The installer:
 
-### Install GTK Theme Dependency
+- installs the `thpm` CLI
+- installs bundled plugins into Omarchy's hook directory
+- preserves disabled bundled plugins as `.sample`
+- keeps custom user hooks in place
+- applies the current theme once setup finishes
 
-The GTK plugin requires Omarchy's Adwaita-compatible GTK theme package:
+### GTK Dependency
+
+The GTK plugin uses Omarchy's Adwaita-compatible GTK package:
 
 ```bash
 omarchy-pkg-add adw-gtk-theme
 ```
 
-You can also install it from the Omarchy menu with `Super + Alt + Space`:
-
-```text
-Install > Package > adw-gtk-theme
-```
-
-The `thpm` installer checks for `adw-gtk-theme` and can prompt to install it if it is missing.
+The installer checks for `adw-gtk-theme` and can prompt to install it.
 
 ## Requirements
 
 - Omarchy
-- An Omarchy 3.3+ theme with `colors.toml`
-- `adw-gtk-theme` for GTK app theming
-- The apps you want to theme installed on your system
+- An Omarchy 3.3+ compatible theme with `colors.toml` for color-based plugins
+- Bash and standard Unix command-line tools
+- Target apps installed for the plugins you enable
 
-Some apps need a one-time theme selection inside their own settings. See [Troubleshooting](#troubleshooting) for common cases.
+Some apps also require one-time selection of the generated Omarchy theme inside their own settings.
 
-## Supported Apps
+## Supported Plugins
 
-**Browsers**
+**Browsers:** Firefox, Qutebrowser, Zen Browser
 
-- Firefox
-- Qutebrowser
-- Zen Browser
+**Editors and writing:** Cursor, Obsidian Terminal plugin, Typora, VS Code, Windsurf, Zed
 
-**Editors and writing apps**
+**Desktop and UI:** Discord clients using Vencord-compatible themes, GTK apps, nwg-dock-hyprland, Qt6 apps using qt6ct, SwayNC, Vicinae
 
-- Cursor
-- Obsidian Terminal plugin
-- Typora
-- VS Code
-- Windsurf
-- Zed
+**Terminal and CLI:** cliamp, Cava, Fish, Foot live colors, fzf, Superfile, tmux
 
-**Desktop and UI**
+**Games and media:** Heroic Games Launcher, Spotify using Spicetify, Steam
 
-- Discord clients using Vencord-compatible themes
-- GTK apps
-- nwg-dock-hyprland
-- Qt6 apps using qt6ct
-- SwayNC
-- Vicinae
-
-**Terminal and CLI**
-
-- cliamp
-- Cava
-- Fish
-- Foot live colors
-- fzf
-- Superfile
-- tmux
-
-**Games and media**
-
-- Heroic Games Launcher
-- Spotify using Spicetify
-- Steam
-
-## Use
-
-List your plugins:
+## Commands
 
 ```bash
 thpm list
-```
-
-Enable or disable a plugin:
-
-```bash
 thpm enable firefox
 thpm disable spotify
-```
-
-Apply the current theme again:
-
-```bash
 thpm run
-```
-
-Open the plugin folder:
-
-```bash
 thpm open
+thpm update
+thpm remove
 ```
-
-## Commands
 
 | Command | What it does |
 | --- | --- |
 | `thpm list` | Show enabled and disabled plugins |
 | `thpm enable <name>` | Enable a plugin |
 | `thpm disable <name>` | Disable a plugin |
-| `thpm run` | Apply the current Omarchy theme now |
-| `thpm open` | Open the plugin folder |
-| `thpm update` | Update `thpm` |
+| `thpm run` | Ask Omarchy to fire the `theme-set` hook now |
+| `thpm open` | Open the plugin directory |
+| `thpm update` | Re-run the installer |
 | `thpm remove` | Uninstall `thpm` |
-| `thpm help` | Show command help |
-
-## What Changed From the Original Project
-
-Theme Hook Plugin Manager builds on the original [omarchy-theme-hook](https://github.com/imbypass/omarchy-theme-hook) idea, but expands it into a managed plugin tool for everyday use.
-
-- A dedicated `thpm` command
-- Plugin listing, enabling, and disabling
-- More bundled app integrations
-- Update and uninstall commands
-- Omarchy 3.3+ `colors.toml` support
-- Clearer setup and troubleshooting docs
 
 ## Custom Plugins
 
-Custom plugins live in:
+Put custom plugins in:
 
 ```text
 ~/.config/omarchy/hooks/theme-set.d/
 ```
 
-Run `thpm open` to open that folder. `thpm` plugins are native Omarchy `theme-set.d` hooks: a plugin is enabled as `name.sh` and disabled as `name.sh.sample`, matching Omarchy's hook runner.
+Use a numeric prefix for predictable ordering:
 
-For plugin authoring details, see [docs/plugins.md](docs/plugins.md).
-
-## Troubleshooting
-
-#### I installed `thpm`, but an app is not changing theme.
-
-Check that the plugin is enabled:
-
-```bash
-thpm list
+```text
+50-myapp.sh
 ```
 
-Then open the app and choose the Omarchy theme in that app's settings if it has a manual theme selector.
+`thpm` discovers plugins from that directory. A new file like `50-myapp.sh` appears as `myapp` in `thpm list`; `50-myapp.sh.sample` appears as disabled and can be enabled with `thpm enable myapp`.
 
-#### Firefox or Zen Browser is not changing theme.
-
-Open `about:config`, set `toolkit.legacyUserProfileCustomizations.stylesheets` to `true`, and restart the browser.
-
-#### Discord is not changing theme.
-
-Use a client with Vencord-compatible themes, such as Vesktop or Equibop. After applying an Omarchy theme, enable the Omarchy theme in your Discord client's theme settings.
-
-#### Obsidian Terminal plugin is not changing theme.
-
-The hook reads Obsidian's vault registry and also checks common vault folders under your home directory. For unusual setups, set one of these before running `thpm run`:
+Color-aware plugins should source the shared runtime before reading theme values or helper functions:
 
 ```bash
-OBSIDIAN_VAULT_PATH="$HOME/path/to/vault" thpm run
-OBSIDIAN_TERMINAL_DATA_JSON="$HOME/path/to/vault/.obsidian/plugins/terminal/data.json" thpm run
+source "${THPM_THEME_ENV:-$HOME/.local/share/thpm/lib/theme-env.sh}"
 ```
 
-#### Spotify is not changing theme.
+For available variables, helper functions, and an example plugin, see [docs/plugins.md](docs/plugins.md).
 
-Make sure Spicetify is installed and working. If Spotify stopped theming after an update, run:
-
-```bash
-spicetify restore backup apply
-```
-
-Then apply your Omarchy theme again:
-
-```bash
-thpm run
-```
-
-#### I see a `colors.toml not found` error.
-
-Use an Omarchy 3.3-compatible theme. The theme must include a valid `colors.toml` file.
-
-#### I see `success: command not found` or `Hook failed` in Omarchy logs.
-
-Update `thpm`. Current plugins run directly as native Omarchy hooks and source `~/.local/share/thpm/lib/theme-env.sh` for theme colors and helpers. Older plugin copies expected a separate `thpm` dispatcher and can fail under Omarchy's current `.d` hook runner.
-
-## Update
+## Updating
 
 ```bash
 thpm update
 ```
 
-You can also re-run the install command.
-
-Updating replaces bundled plugin files with the latest versions. If you want to customize a plugin, copy it to a new filename in the plugin folder first.
+Updating replaces bundled plugin files with the latest versions. Custom hooks are preserved. If you want to customize a bundled plugin, copy it to a new filename before editing it.
 
 ## Uninstall
 
@@ -227,6 +141,76 @@ Or run:
 curl -fsSL https://raw.githubusercontent.com/OldJobobo/theme-hook-plugin-manager/thpm/uninstall.sh | bash
 ```
 
-## Credits
+The uninstaller removes `thpm`, bundled plugins, the shared runtime, and generated integration files it knows how to clean up. Custom Omarchy hooks are preserved.
 
-Based on [imbypass/omarchy-theme-hook](https://github.com/imbypass/omarchy-theme-hook). This project expands the original hook approach into a plugin-managed Omarchy theming tool.
+## Troubleshooting
+
+### A plugin is not changing an app
+
+Check that the plugin is enabled:
+
+```bash
+thpm list
+```
+
+Then ask Omarchy to reapply the theme hook:
+
+```bash
+thpm run
+```
+
+Some apps require selecting the generated Omarchy theme in their own settings.
+
+### `colors.toml not found`
+
+Use an Omarchy 3.3+ compatible theme. `thpm` reads:
+
+```text
+~/.config/omarchy/current/theme/colors.toml
+```
+
+Generated terminal or app theme files are not treated as the source of truth.
+
+### Firefox or Zen Browser is not changing
+
+Open `about:config`, set `toolkit.legacyUserProfileCustomizations.stylesheets` to `true`, and restart the browser. The plugin also needs a valid browser profile directory.
+
+### Discord is not changing
+
+Use a Vencord-compatible client, such as Vesktop or Equibop, then enable the generated theme in that client's theme settings.
+
+### Spotify is not changing
+
+Make sure Spicetify is installed and configured. If Spotify changed after an update, run:
+
+```bash
+spicetify restore backup apply
+thpm run
+```
+
+### Obsidian Terminal is not changing
+
+The plugin reads Obsidian's vault registry and common vault directories. For unusual layouts, pass the vault or plugin data file explicitly:
+
+```bash
+OBSIDIAN_VAULT_PATH="$HOME/path/to/vault" thpm run
+OBSIDIAN_TERMINAL_DATA_JSON="$HOME/path/to/vault/.obsidian/plugins/terminal/data.json" thpm run
+```
+
+### Old hook errors after updating
+
+Current plugins are native Omarchy `theme-set.d` hooks and source `~/.local/share/thpm/lib/theme-env.sh`. If logs mention older dispatcher behavior, update `thpm` and remove stale custom copies of old bundled hooks.
+
+## Development
+
+Run the test suite before submitting changes:
+
+```bash
+bash tests/run.sh
+```
+
+Contributor notes live in [AGENTS.md](AGENTS.md), and plugin authoring details live in [docs/plugins.md](docs/plugins.md).
+
+## Attribution
+
+Theme Hook Plugin Manager is an independent Omarchy-focused project. Earlier work in this space includes [imbypass/omarchy-theme-hook](https://github.com/imbypass/omarchy-theme-hook), credited here for project history.

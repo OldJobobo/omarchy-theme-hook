@@ -360,6 +360,30 @@ test_thpm_enable_disable_and_list() {
   assert_contains "$output" "Plugin not found: missing-plugin" "thpm enable reports missing plugin"
 }
 
+test_thpm_manages_custom_hooks() {
+  local home_dir="$TMP_ROOT/thpm-custom-home"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local output
+
+  mkdir -p "$hook_dir"
+  printf '#!/usr/bin/env bash\n' > "$hook_dir/05-local.sh"
+  printf '#!/usr/bin/env bash\n' > "$hook_dir/99-custom-widget.sh.sample"
+
+  output="$(run_thpm "$home_dir" list)"
+  assert_contains "$output" "local" "thpm list includes enabled custom hook"
+  assert_contains "$output" "custom-widget" "thpm list includes disabled custom hook"
+
+  output="$(run_thpm "$home_dir" enable custom-widget)"
+  assert_contains "$output" "Plugin Enabled: custom-widget" "thpm enables custom hook by suffix name"
+  assert_file_exists "$hook_dir/99-custom-widget.sh" "thpm restores custom hook .sh suffix"
+  assert_file_missing "$hook_dir/99-custom-widget.sh.sample" "thpm removes custom hook .sample suffix"
+
+  output="$(run_thpm "$home_dir" disable custom-widget)"
+  assert_contains "$output" "Plugin Disabled: custom-widget" "thpm disables custom hook by suffix name"
+  assert_file_exists "$hook_dir/99-custom-widget.sh.sample" "thpm adds custom hook .sample suffix"
+  assert_file_missing "$hook_dir/99-custom-widget.sh" "thpm removes active custom hook file"
+}
+
 test_thpm_aliases() {
   local home_dir="$TMP_ROOT/alias-home"
   local bin_dir="$TMP_ROOT/alias-bin"
@@ -1621,6 +1645,7 @@ main() {
   test_project_omarchy_default_contract
   test_thpm_help
   test_thpm_enable_disable_and_list
+  test_thpm_manages_custom_hooks
   test_thpm_aliases
   test_thpm_open_uses_xdg_open_for_hook_dir
   test_thpm_gtk_post_enable_disable_updates_gsettings

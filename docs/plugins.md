@@ -116,9 +116,18 @@ Save it as:
 ~/.config/omarchy/hooks/theme-set.d/50-myapp.sh
 ```
 
-Then enable it:
+It is enabled immediately because it ends in `.sh`. To install it disabled, save it as:
+
+```text
+~/.config/omarchy/hooks/theme-set.d/50-myapp.sh.sample
+```
+
+Then manage it by name:
 
 ```bash
+thpm list
+thpm enable myapp
+thpm disable myapp
 thpm run
 ```
 
