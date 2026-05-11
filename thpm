@@ -394,6 +394,20 @@ doctor_check_dir() {
     fi
 }
 
+doctor_find_browser_default_profile() {
+    local base_dir="$1"
+    local profiles_file="$base_dir/profiles.ini"
+    local default_profile
+
+    [[ -f "$profiles_file" ]] || return 1
+    default_profile=$(awk -F= '
+        /^\[Install/ { in_install=1 }
+        in_install && /^Default=/ { print $2; exit }
+    ' "$profiles_file")
+    [[ -n "$default_profile" && -d "$base_dir/$default_profile" ]] || return 1
+    printf '%s\n' "$base_dir/$default_profile"
+}
+
 doctor_check_colors() {
     local colors_file="$THPM_COLORS_FILE_DEFAULT"
     local key
@@ -433,7 +447,7 @@ doctor_check_browser_profile() {
     local browser="$1"
     local base_dir="$2"
     local profiles_file="$base_dir/profiles.ini"
-    local default_profile
+    local default_profile_dir
     local prefs_file
 
     if [[ ! -f "$profiles_file" ]]; then
@@ -441,21 +455,85 @@ doctor_check_browser_profile() {
         return 0
     fi
 
-    default_profile=$(awk -F= '
-        /^\[Install/ { in_install=1 }
-        in_install && /^Default=/ { print $2; exit }
-    ' "$profiles_file")
-    if [[ -z "$default_profile" || ! -d "$base_dir/$default_profile" ]]; then
+    default_profile_dir="$(doctor_find_browser_default_profile "$base_dir")"
+    if [[ -z "$default_profile_dir" ]]; then
         doctor_warn "$browser default profile was not found"
         return 0
     fi
 
-    doctor_ok "$browser default profile found: $base_dir/$default_profile"
-    prefs_file="$base_dir/$default_profile/prefs.js"
+    doctor_ok "$browser default profile found: $default_profile_dir"
+    prefs_file="$default_profile_dir/prefs.js"
     if [[ -f "$prefs_file" ]] && grep -q 'toolkit.legacyUserProfileCustomizations.stylesheets", false' "$prefs_file"; then
         doctor_warn "$browser userChrome preference is disabled in prefs.js"
     else
         doctor_ok "$browser userChrome preference is enabled or can be written"
+    fi
+}
+
+doctor_check_zen_managed_css_file() {
+    local file="$1"
+    local display_name="$2"
+
+    if [[ -f "$file" ]]; then
+        doctor_ok "$display_name found: $file"
+    else
+        doctor_warn "$display_name missing; run thpm run to generate Zen theme files"
+    fi
+}
+
+doctor_check_zen_imports() {
+    local file="$1"
+    local display_name="$2"
+    local expected_a="$3"
+    local expected_b="$4"
+
+    if [[ ! -f "$file" ]]; then
+        doctor_warn "$display_name missing: $file"
+        return 0
+    fi
+
+    if grep -Fq '/* THPM Zen hook start */' "$file" && grep -Fq '/* THPM Zen hook end */' "$file"; then
+        doctor_ok "$display_name has THPM managed import block"
+    else
+        doctor_warn "$display_name missing THPM managed import block; run thpm run"
+    fi
+
+    if grep -Fq "$expected_a" "$file" && grep -Fq "$expected_b" "$file"; then
+        doctor_ok "$display_name imports THPM Zen stylesheets"
+    else
+        doctor_warn "$display_name does not import all THPM Zen stylesheets"
+    fi
+
+    if awk '
+        /\/\* THPM Zen hook end \*\// { after=1; next }
+        after && /^[[:space:]]*@import[[:space:]]/ { found=1 }
+        END { exit found ? 0 : 1 }
+    ' "$file"; then
+        doctor_warn "$display_name has @import rules after the THPM block that may override Zen theme CSS"
+    fi
+}
+
+doctor_check_zen_generated_theme() {
+    local profile_dir
+    local chrome_dir
+    local user_chrome_file
+    local user_content_file
+
+    profile_dir="$(doctor_find_browser_default_profile "$HOME/.zen")"
+    [[ -n "$profile_dir" ]] || return 0
+
+    chrome_dir="$profile_dir/chrome"
+    user_chrome_file="$chrome_dir/userChrome.css"
+    user_content_file="$chrome_dir/userContent.css"
+
+    doctor_check_zen_managed_css_file "$chrome_dir/thpm-zen-colors.css" "Zen managed colors stylesheet"
+    doctor_check_zen_managed_css_file "$chrome_dir/thpm-zen-userChrome.css" "Zen managed browser chrome stylesheet"
+    doctor_check_zen_managed_css_file "$chrome_dir/thpm-zen-userContent.css" "Zen managed content stylesheet"
+    doctor_check_zen_imports "$user_chrome_file" "Zen userChrome.css" '@import url("./thpm-zen-colors.css");' '@import url("./thpm-zen-userChrome.css");'
+    doctor_check_zen_imports "$user_content_file" "Zen userContent.css" '@import url("./thpm-zen-colors.css");' '@import url("./thpm-zen-userContent.css");'
+
+    if command -v pgrep >/dev/null 2>&1 && pgrep -x zen-browser >/dev/null; then
+        doctor_info "Zen Browser is running; restart it after thpm run to reload browser chrome CSS"
     fi
 }
 
@@ -564,6 +642,7 @@ doctor_check_plugin_specific() {
         zen)
             doctor_check_command zen-browser "Zen Browser"
             doctor_check_browser_profile "Zen Browser" "$HOME/.zen"
+            doctor_check_zen_generated_theme
         ;;
         cliamp) doctor_check_command cliamp cliamp ;;
         heroic) doctor_check_command heroic "Heroic Launcher" ;;
