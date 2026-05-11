@@ -513,11 +513,25 @@ doctor_check_zen_imports() {
     fi
 }
 
+doctor_check_zen_frame_rules() {
+    local file="$1"
+
+    [[ -f "$file" ]] || return 0
+    if grep -Fq "#zen-sidebar-top-buttons" "$file" &&
+       grep -Fq "#zen-appcontent-wrapper" "$file" &&
+       grep -Fq -- "--zen-colors-primary" "$file"; then
+        doctor_ok "Zen managed browser chrome stylesheet includes modern frame/topbar rules"
+    else
+        doctor_warn "Zen managed browser chrome stylesheet is stale; run thpm run to regenerate frame/topbar rules"
+    fi
+}
+
 doctor_check_zen_generated_theme() {
     local profile_dir
     local chrome_dir
     local user_chrome_file
     local user_content_file
+    local managed_chrome_file
 
     profile_dir="$(doctor_find_browser_default_profile "$HOME/.zen")"
     [[ -n "$profile_dir" ]] || return 0
@@ -525,10 +539,12 @@ doctor_check_zen_generated_theme() {
     chrome_dir="$profile_dir/chrome"
     user_chrome_file="$chrome_dir/userChrome.css"
     user_content_file="$chrome_dir/userContent.css"
+    managed_chrome_file="$chrome_dir/thpm-zen-userChrome.css"
 
     doctor_check_zen_managed_css_file "$chrome_dir/thpm-zen-colors.css" "Zen managed colors stylesheet"
-    doctor_check_zen_managed_css_file "$chrome_dir/thpm-zen-userChrome.css" "Zen managed browser chrome stylesheet"
+    doctor_check_zen_managed_css_file "$managed_chrome_file" "Zen managed browser chrome stylesheet"
     doctor_check_zen_managed_css_file "$chrome_dir/thpm-zen-userContent.css" "Zen managed content stylesheet"
+    doctor_check_zen_frame_rules "$managed_chrome_file"
     doctor_check_zen_imports "$user_chrome_file" "Zen userChrome.css" "thpm-zen-colors.css" "thpm-zen-userChrome.css"
     doctor_check_zen_imports "$user_content_file" "Zen userContent.css" "thpm-zen-colors.css" "thpm-zen-userContent.css"
 
