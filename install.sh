@@ -65,6 +65,9 @@ is_bundled_plugin() {
 }
 
 disabled_plugins=()
+enabled_bundled_count=0
+disabled_bundled_count=0
+recover_all_disabled=0
 record_disabled_plugin() {
     local plugin="$1"
     local name
@@ -73,13 +76,33 @@ record_disabled_plugin() {
     name=${name%.sample}
     is_bundled_plugin "$name" || return 0
     disabled_plugins+=("$name")
+    disabled_bundled_count=$((disabled_bundled_count + 1))
+}
+
+record_enabled_plugin() {
+    local plugin="$1"
+    local name
+
+    name=$(basename "$plugin")
+    is_bundled_plugin "$name" || return 0
+    enabled_bundled_count=$((enabled_bundled_count + 1))
 }
 
 if [[ -d "$HOME/.config/omarchy/hooks/theme-set.d" ]]; then
+    for plugin in "$HOME"/.config/omarchy/hooks/theme-set.d/*.sh; do
+        [[ -f "$plugin" ]] || continue
+        record_enabled_plugin "$plugin"
+    done
     for plugin in "$HOME"/.config/omarchy/hooks/theme-set.d/*.sh.sample; do
         [[ -f "$plugin" ]] || continue
         record_disabled_plugin "$plugin"
     done
+fi
+
+if [[ "$enabled_bundled_count" -eq 0 && "$disabled_bundled_count" -eq "${#bundled_plugins[@]}" ]]; then
+    echo "All bundled plugins are disabled; treating this as update fallout and restoring defaults."
+    disabled_plugins=()
+    recover_all_disabled=1
 fi
 
 # Clone the Theme Hook Plugin Manager repository
@@ -125,6 +148,12 @@ for plugin in "${bundled_plugins[@]}"; do
     [[ -f "$HOME/.config/omarchy/hooks/theme-set.d/$plugin" ]] && chmod 644 "$HOME/.config/omarchy/hooks/theme-set.d/$plugin"
     [[ -f "$HOME/.config/omarchy/hooks/theme-set.d/$plugin.sample" ]] && chmod 644 "$HOME/.config/omarchy/hooks/theme-set.d/$plugin.sample"
 done
+
+if [[ "$recover_all_disabled" -eq 1 ]]; then
+    for plugin in "${bundled_plugins[@]}"; do
+        rm -f "$HOME/.config/omarchy/hooks/theme-set.d/$plugin.sample"
+    done
+fi
 
 for plugin in "${disabled_plugins[@]}"; do
     if [[ -f "$HOME/.config/omarchy/hooks/theme-set.d/$plugin" ]]; then

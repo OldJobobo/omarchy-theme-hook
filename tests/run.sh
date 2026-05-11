@@ -1461,6 +1461,36 @@ test_install_keeps_non_executable_hooks_enabled() {
   assert_file_missing "$hook_dir/30-vscode.sh.sample" "install does not convert non-executable hook to sample"
 }
 
+test_install_recovers_all_bundled_plugins_disabled_by_bad_update() {
+  local home_dir="$TMP_ROOT/install-all-disabled-home"
+  local bin_dir="$TMP_ROOT/install-all-disabled-bin"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local hook
+  local status
+
+  rm -f "$TMP_ROOT/install-git-branch.log"
+  rm -f "$TMP_ROOT/install-git-args.log"
+  mkdir -p "$hook_dir" "$bin_dir"
+  for hook in "$ROOT_DIR"/theme-set.d/*.sh; do
+    printf '#!/usr/bin/env bash\n' > "$hook_dir/$(basename "$hook").sample"
+  done
+  make_stub_bin "$bin_dir" pacman 'exit 0'
+  make_stub_bin "$bin_dir" sudo 'printf "sudo should not be called\n" >&2; exit 1'
+  make_stub_bin "$bin_dir" omarchy-hook 'exit 0'
+  make_stub_bin "$bin_dir" omarchy-show-done 'exit 0'
+  make_install_git_stub "$bin_dir"
+
+  PATH="$bin_dir:$PATH" HOME="$home_dir" "$ROOT_DIR/install.sh" >/dev/null 2>&1
+  status=$?
+
+  assert_success "$status" "install recovers all-bundled-disabled state successfully"
+  assert_file_exists "$hook_dir/00-fish.sh" "install re-enables fish after all-disabled update fallout"
+  assert_file_exists "$hook_dir/30-vscode.sh" "install re-enables vscode after all-disabled update fallout"
+  assert_file_exists "$hook_dir/40-zen.sh" "install re-enables zen after all-disabled update fallout"
+  assert_file_missing "$hook_dir/00-fish.sh.sample" "install clears fish sample after all-disabled update fallout"
+  assert_file_missing "$hook_dir/40-zen.sh.sample" "install clears zen sample after all-disabled update fallout"
+}
+
 test_install_respects_branch_override() {
   local home_dir="$TMP_ROOT/install-branch-home"
   local bin_dir="$TMP_ROOT/install-branch-bin"
@@ -1852,6 +1882,7 @@ main() {
   test_theme_set_extracts_colors_with_leading_whitespace_and_comments
   test_install_preserves_disabled_plugins_and_installs_files
   test_install_keeps_non_executable_hooks_enabled
+  test_install_recovers_all_bundled_plugins_disabled_by_bad_update
   test_install_respects_branch_override
   test_install_preserves_existing_sample_disabled_plugin
   test_install_disabled_sample_wins_over_stale_active_plugin
