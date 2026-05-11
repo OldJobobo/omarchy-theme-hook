@@ -1256,9 +1256,9 @@ fi
 extension_name="tintedtheming.base16-tinted-themes"
 
 install_cursor_extension() {
-    is_extension_installed=$(cursor --list-extensions | grep -Fx "${extension_name}")
+    is_extension_installed=$(cursor --list-extensions 2>/dev/null | grep -Fx "${extension_name}")
     if [[ -z "$is_extension_installed" ]]; then
-        cursor --install-extension "$extension_name"
+        cursor --install-extension "$extension_name" 2>/dev/null
         sleep 3
     fi
 }

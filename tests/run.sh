@@ -1453,6 +1453,47 @@ EOF
   assert_contains "$(cat "$code_log")" "--install-extension tintedtheming.base16-tinted-themes" "vscode plugin installs extension when missing"
 }
 
+test_cursor_plugin_suppresses_electron_deprecation_warning() {
+  local home_dir="$TMP_ROOT/cursor-warning-home"
+  local bin_dir="$TMP_ROOT/cursor-warning-bin"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local extension_dir="$home_dir/.cursor/extensions/tintedtheming.base16-tinted-themes-1.0.0"
+  local package_file="$extension_dir/package.json"
+  local cursor_log="$TMP_ROOT/cursor.log"
+  local output
+
+  write_colors_fixture "$home_dir"
+  mkdir -p "$hook_dir" "$bin_dir" "$extension_dir/themes/base16"
+  cp "$ROOT_DIR/theme-set.d/30-cursor.sh" "$hook_dir/30-cursor.sh"
+  chmod +x "$hook_dir/30-cursor.sh"
+  cat > "$package_file" <<'EOF'
+{
+  "contributes": {
+    "themes": []
+  }
+}
+EOF
+  cat > "$bin_dir/cursor" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$cursor_log"
+printf '%s\n' '(node:182356) [DEP0040] DeprecationWarning: The \`punycode\` module is deprecated. Please use a userland alternative instead.' >&2
+case "\${1:-}" in
+  --list-extensions) exit 0 ;;
+  --install-extension) exit 0 ;;
+esac
+EOF
+  chmod +x "$bin_dir/cursor"
+  make_stub_bin "$bin_dir" sleep 'exit 0'
+  make_stub_bin "$bin_dir" pgrep 'exit 1'
+  make_stub_bin "$bin_dir" notify-send 'exit 0'
+
+  output="$(PATH="$bin_dir:$PATH" run_theme_hooks "$home_dir" 2>&1)"
+
+  assert_contains "$output" "Cursor theme updated!" "cursor plugin still reports success"
+  assert_not_contains "$output" "punycode" "cursor plugin suppresses Electron punycode warning"
+  assert_contains "$(cat "$cursor_log")" "--install-extension tintedtheming.base16-tinted-themes" "cursor plugin still installs extension when missing"
+}
+
 test_theme_set_extracts_colors_with_leading_whitespace_and_comments() {
   local home_dir="$TMP_ROOT/spaced-colors-home"
   local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
@@ -2045,6 +2086,7 @@ main() {
   test_tmux_plugin_prefers_existing_legacy_config
   test_vscode_plugin_skips_when_theme_provides_vscode_json
   test_vscode_plugin_patches_extension_manifest_and_installs_theme
+  test_cursor_plugin_suppresses_electron_deprecation_warning
   test_theme_set_extracts_colors_with_leading_whitespace_and_comments
   test_install_preserves_disabled_plugins_and_installs_files
   test_install_keeps_non_executable_hooks_enabled
