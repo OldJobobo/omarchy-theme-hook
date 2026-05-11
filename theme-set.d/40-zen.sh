@@ -1,11 +1,4 @@
 #!/usr/bin/env bash
-source "${THPM_THEME_ENV:-$HOME/.local/share/thpm/lib/theme-env.sh}"
-
-output_file="$HOME/.config/omarchy/current/theme/zen.css"
-
-if ! command -v zen-browser >/dev/null 2>&1; then
-    skipped "Zen Browser"
-fi
 
 find_default_profile() {
     [[ -f "$HOME/.zen/profiles.ini" ]] || return 1
@@ -14,8 +7,152 @@ find_default_profile() {
         in_install && /^Default=/ { print $2; exit }
     ' "$HOME/.zen/profiles.ini"
 }
+
 default_profile="$HOME/.zen/$(find_default_profile)"
-[[ -n "${default_profile##"$HOME/.zen/"}" && -d "$default_profile" ]] || skipped "Zen Browser profile"
+chrome_dir="$default_profile/chrome"
+user_chrome_file="$chrome_dir/userChrome.css"
+user_content_file="$chrome_dir/userContent.css"
+managed_colors_file="$chrome_dir/thpm-zen-colors.css"
+managed_chrome_file="$chrome_dir/thpm-zen-userChrome.css"
+managed_content_file="$chrome_dir/thpm-zen-userContent.css"
+legacy_colors_file="$chrome_dir/colors.css"
+import_start="/* THPM Zen hook start */"
+import_end="/* THPM Zen hook end */"
+
+is_default_profile_valid() {
+    [[ -n "${default_profile##"$HOME/.zen/"}" && -d "$default_profile" ]]
+}
+
+remove_managed_import_block() {
+    local file="$1"
+    local tmp_file
+
+    [[ -f "$file" ]] || return 0
+    tmp_file="${file}.thpm-tmp"
+    awk -v start="$import_start" -v end="$import_end" '
+        $0 == start { skip=1; next }
+        $0 == end { skip=0; next }
+        !skip { print }
+    ' "$file" > "$tmp_file"
+    mv "$tmp_file" "$file"
+}
+
+write_import_block() {
+    local file="$1"
+    local target="$2"
+
+    {
+        printf '%s\n' "$import_start"
+        printf '@import url("./%s");\n' "$target"
+        printf '%s\n' "$import_end"
+    } > "$file"
+}
+
+ensure_managed_import_block() {
+    local file="$1"
+    local target="$2"
+    local tmp_file
+
+    mkdir -p "$(dirname "$file")"
+    if [[ -f "$file" ]] && grep -Fq "$import_start" "$file"; then
+        return 0
+    fi
+
+    if [[ -f "$file" ]]; then
+        tmp_file="${file}.thpm-tmp"
+        write_import_block "$tmp_file" "$target"
+        printf '\n' >> "$tmp_file"
+        cat "$file" >> "$tmp_file"
+        mv "$tmp_file" "$file"
+    else
+        write_import_block "$file" "$target"
+    fi
+}
+
+looks_like_legacy_user_chrome() {
+    local file="$1"
+
+    [[ -f "$file" ]] || return 1
+    grep -Fq '@import url("./colors.css");' "$file" || return 1
+    grep -Fq -- "--panel-separator-zap-gradient" "$file" || return 1
+    grep -Fq -- "--zen-main-browser-background" "$file" || return 1
+}
+
+looks_like_legacy_user_content() {
+    local file="$1"
+
+    [[ -f "$file" ]] || return 1
+    grep -Fq '@import url("./colors.css");' "$file" || return 1
+    grep -Fq -- "--newtab-background-color" "$file" || return 1
+    grep -Fq -- "--zen-main-browser-background" "$file" || return 1
+}
+
+backup_once() {
+    local file="$1"
+    local backup_file="${file}.thpm-migrated.bak"
+
+    [[ -f "$backup_file" ]] || cp "$file" "$backup_file"
+}
+
+migrate_legacy_file_to_import() {
+    local file="$1"
+    local target="$2"
+    local kind="$3"
+
+    if [[ "$kind" == "chrome" ]] && looks_like_legacy_user_chrome "$file"; then
+        backup_once "$file"
+        write_import_block "$file" "$target"
+    elif [[ "$kind" == "content" ]] && looks_like_legacy_user_content "$file"; then
+        backup_once "$file"
+        write_import_block "$file" "$target"
+    fi
+}
+
+remove_legacy_file_if_owned() {
+    local file="$1"
+    local kind="$2"
+
+    if [[ "$kind" == "chrome" ]] && looks_like_legacy_user_chrome "$file"; then
+        backup_once "$file"
+        rm -f "$file"
+    elif [[ "$kind" == "content" ]] && looks_like_legacy_user_content "$file"; then
+        backup_once "$file"
+        rm -f "$file"
+    fi
+}
+
+remove_legacy_colors_if_unused() {
+    [[ -f "$legacy_colors_file" ]] || return 0
+    grep -Fq -- "--color00:" "$legacy_colors_file" || return 0
+    grep -Fq -- "--color0F:" "$legacy_colors_file" || return 0
+    grep -qs './colors.css' "$user_chrome_file" "$user_content_file" 2>/dev/null && return 0
+    rm -f "$legacy_colors_file"
+}
+
+cleanup_zen_theme() {
+    is_default_profile_valid || return 0
+    remove_managed_import_block "$user_chrome_file"
+    remove_managed_import_block "$user_content_file"
+    remove_legacy_file_if_owned "$user_chrome_file" chrome
+    remove_legacy_file_if_owned "$user_content_file" content
+    rm -f "$managed_colors_file" "$managed_chrome_file" "$managed_content_file"
+    remove_legacy_colors_if_unused
+}
+
+if [[ "${1:-}" == "--cleanup" ]]; then
+    cleanup_zen_theme
+    exit 0
+fi
+
+source "${THPM_THEME_ENV:-$HOME/.local/share/thpm/lib/theme-env.sh}"
+
+output_file="$HOME/.config/omarchy/current/theme/zen.css"
+
+if ! command -v zen-browser >/dev/null 2>&1; then
+    skipped "Zen Browser"
+fi
+
+is_default_profile_valid || skipped "Zen Browser profile"
 
 enable_userchrome() {
     local prefs_file="$default_profile/prefs.js"
@@ -30,7 +167,7 @@ enable_userchrome() {
 }
 enable_userchrome
 
-mkdir -p "$default_profile/chrome"
+mkdir -p "$chrome_dir"
 
 cat > "$output_file" << EOF
 :root {
@@ -52,11 +189,10 @@ cat > "$output_file" << EOF
 --color0F: #${bright_red};
 }
 EOF
-cp "$output_file" "$default_profile/chrome/colors.css"
+cp "$output_file" "$managed_colors_file"
 
-if [[ ! -f "$default_profile/chrome/userChrome.css" ]]; then
-cat > "$default_profile/chrome/userChrome.css" << EOF
-@import url("./colors.css");
+cat > "$managed_chrome_file" << 'EOF'
+@import url("./thpm-zen-colors.css");
 
 :root {
     --base00: var(--color00);
@@ -234,11 +370,9 @@ splitter#sidebar-tools-and-extensions-splitter {
     --zen-main-browser-background: var(--base00) !important;
 }
 EOF
-fi
 
-if [[ ! -f "$default_profile/chrome/userContent.css" ]]; then
-cat > "$default_profile/chrome/userContent.css" <<EOF
-@import url("./colors.css");
+cat > "$managed_content_file" << 'EOF'
+@import url("./thpm-zen-colors.css");
 
 :root {
     --base00: var(--color00);
@@ -298,17 +432,12 @@ body {
     margin-top: 10% !important;
 }
 EOF
-fi
 
-if pgrep -x "zen-browser" > /dev/null; then
-    pkill -x "zen-browser" > /dev/null
-    sleep 2
-    if pgrep -x "zen-browser" > /dev/null; then
-        pkill -9 -x "zen-browser" > /dev/null
-        sleep 1
-    fi
-    zen-browser > /dev/null &
-fi
+migrate_legacy_file_to_import "$user_chrome_file" "$(basename "$managed_chrome_file")" chrome
+migrate_legacy_file_to_import "$user_content_file" "$(basename "$managed_content_file")" content
+ensure_managed_import_block "$user_chrome_file" "$(basename "$managed_chrome_file")"
+ensure_managed_import_block "$user_content_file" "$(basename "$managed_content_file")"
+remove_legacy_colors_if_unused
 
 require_restart "zen-browser"
 success "Zen Browser theme updated!"

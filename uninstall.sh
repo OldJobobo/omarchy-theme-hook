@@ -7,11 +7,11 @@ omarchy-show-logo
 echo "Uninstalling thpm.."
 
 rm -rf /tmp/theme-hook/
-rm -f $HOME/.local/bin/thpm
-rm -f $HOME/.local/share/omarchy/bin/thpm
-rm -f $HOME/.local/share/omarchy/bin/thctl
-rm -f $HOME/.local/share/thpm/lib/theme-env.sh
-rmdir $HOME/.local/share/thpm/lib $HOME/.local/share/thpm 2>/dev/null || true
+rm -f "$HOME/.local/bin/thpm"
+rm -f "$HOME/.local/share/omarchy/bin/thpm"
+rm -f "$HOME/.local/share/omarchy/bin/thctl"
+rm -f "$HOME/.local/share/thpm/lib/theme-env.sh"
+rmdir "$HOME/.local/share/thpm/lib" "$HOME/.local/share/thpm" 2>/dev/null || true
 
 if [[ -f "$HOME/.config/omarchy/hooks/theme-set" ]] && grep -Eq 'Omarchy 3\.3\+ uses colors\.toml|Compatibility shim for older thpm installs' "$HOME/.config/omarchy/hooks/theme-set"; then
     rm -f "$HOME/.config/omarchy/hooks/theme-set"
@@ -44,6 +44,12 @@ bundled_plugins=(
     50-cliamp.sh
     50-heroic.sh
 )
+
+for zen_hook in "$HOME"/.config/omarchy/hooks/theme-set.d/*-zen.sh "$HOME"/.config/omarchy/hooks/theme-set.d/*-zen.sh.sample; do
+    [[ -f "$zen_hook" ]] || continue
+    bash "$zen_hook" --cleanup > /dev/null 2>&1 || true
+    break
+done
 
 for plugin in "${bundled_plugins[@]}"; do
     rm -f "$HOME/.config/omarchy/hooks/theme-set.d/$plugin"

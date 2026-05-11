@@ -97,6 +97,8 @@ thpm remove
 | `thpm update` | Re-run the installer |
 | `thpm remove` | Uninstall `thpm` |
 
+`thpm list` and `thpm help` may show a cached notice when a newer commit is available. They do not update files automatically; run `thpm update` to install updates.
+
 ## Custom Plugins
 
 Put custom plugins in:
@@ -173,7 +175,7 @@ Generated terminal or app theme files are not treated as the source of truth.
 
 ### Firefox or Zen Browser is not changing
 
-Open `about:config`, set `toolkit.legacyUserProfileCustomizations.stylesheets` to `true`, and restart the browser. The plugin also needs a valid browser profile directory.
+Open `about:config`, set `toolkit.legacyUserProfileCustomizations.stylesheets` to `true`, and restart the browser. The plugin also needs a valid browser profile directory. The Zen plugin writes managed `thpm-zen-*.css` files and a marked import block; `thpm disable zen` removes those managed imports but does not change unrelated user CSS.
 
 ### Discord is not changing
 

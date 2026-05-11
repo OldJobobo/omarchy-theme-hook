@@ -89,20 +89,26 @@ fi
 # Clone the Theme Hook Plugin Manager repository
 echo -e "Downloading thpm.."
 git clone --branch "$THPM_BRANCH" --depth 1 https://github.com/OldJobobo/theme-hook-plugin-manager.git /tmp/theme-hook > /dev/null 2>&1
+install_commit=$(git -C /tmp/theme-hook rev-parse HEAD 2>/dev/null || true)
 
 # Remove legacy aliases from previous installs
-rm -f $HOME/.local/share/omarchy/bin/theme-hook-update > /dev/null 2>&1
-rm -f $HOME/.local/share/omarchy/bin/thctl > /dev/null 2>&1
-rm -f $HOME/.local/share/omarchy/bin/thpm > /dev/null 2>&1
+rm -f "$HOME/.local/share/omarchy/bin/theme-hook-update" > /dev/null 2>&1
+rm -f "$HOME/.local/share/omarchy/bin/thctl" > /dev/null 2>&1
+rm -f "$HOME/.local/share/omarchy/bin/thpm" > /dev/null 2>&1
 
 # Install the thpm CLI
-mkdir -p $HOME/.local/bin
-mv -f /tmp/theme-hook/thpm $HOME/.local/bin/thpm
-chmod +x $HOME/.local/bin/thpm
+mkdir -p "$HOME/.local/bin"
+mv -f /tmp/theme-hook/thpm "$HOME/.local/bin/thpm"
+chmod +x "$HOME/.local/bin/thpm"
 
 # Install shared thpm hook runtime
-mkdir -p $HOME/.local/share/thpm/lib
-mv -f /tmp/theme-hook/lib/theme-env.sh $HOME/.local/share/thpm/lib/theme-env.sh
+mkdir -p "$HOME/.local/share/thpm/lib"
+mv -f /tmp/theme-hook/lib/theme-env.sh "$HOME/.local/share/thpm/lib/theme-env.sh"
+cat > "$HOME/.local/share/thpm/version" <<EOF
+repo=https://github.com/OldJobobo/theme-hook-plugin-manager.git
+branch=$THPM_BRANCH
+commit=$install_commit
+EOF
 
 # Remove the old thpm dispatcher if this install previously owned it. Omarchy
 # now runs theme-set.d hooks directly, so no dispatcher is needed.
@@ -111,14 +117,14 @@ if [[ -f "$HOME/.config/omarchy/hooks/theme-set" ]] && grep -Eq 'Omarchy 3\.3\+ 
 fi
 
 # Create Omarchy theme hook directory and copy native hook scripts
-mkdir -p $HOME/.config/omarchy/hooks/theme-set.d/
-mv -f /tmp/theme-hook/theme-set.d/* $HOME/.config/omarchy/hooks/theme-set.d/
+mkdir -p "$HOME/.config/omarchy/hooks/theme-set.d/"
+mv -f /tmp/theme-hook/theme-set.d/* "$HOME/.config/omarchy/hooks/theme-set.d/"
 
 # Remove any new temp files
 rm -rf /tmp/theme-hook
 
 # Update permissions
-chmod 644 $HOME/.local/share/thpm/lib/theme-env.sh
+chmod 644 "$HOME/.local/share/thpm/lib/theme-env.sh"
 for plugin in "${bundled_plugins[@]}"; do
     [[ -f "$HOME/.config/omarchy/hooks/theme-set.d/$plugin" ]] && chmod 644 "$HOME/.config/omarchy/hooks/theme-set.d/$plugin"
     [[ -f "$HOME/.config/omarchy/hooks/theme-set.d/$plugin.sample" ]] && chmod 644 "$HOME/.config/omarchy/hooks/theme-set.d/$plugin.sample"

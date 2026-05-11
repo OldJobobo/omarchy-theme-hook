@@ -177,6 +177,10 @@ make_install_git_stub() {
 
   cat > "$bin_dir/git" <<EOF
 #!/usr/bin/env bash
+if [[ "\${1:-}" == "-C" && "\${3:-}" == "rev-parse" && "\${4:-}" == "HEAD" ]]; then
+  printf '%s\n' "local-install-commit"
+  exit 0
+fi
 printf '%s\n' "\$*" > "$TMP_ROOT/install-git-args.log"
 if [[ "\$1" == "clone" ]]; then
   shift
@@ -382,6 +386,61 @@ test_thpm_manages_custom_hooks() {
   assert_contains "$output" "Plugin Disabled: custom-widget" "thpm disables custom hook by suffix name"
   assert_file_exists "$hook_dir/99-custom-widget.sh.sample" "thpm adds custom hook .sample suffix"
   assert_file_missing "$hook_dir/99-custom-widget.sh" "thpm removes active custom hook file"
+}
+
+test_thpm_list_reports_available_update() {
+  local home_dir="$TMP_ROOT/thpm-update-home"
+  local bin_dir="$TMP_ROOT/thpm-update-bin"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local version_file="$home_dir/.local/share/thpm/version"
+  local output
+
+  mkdir -p "$hook_dir" "$bin_dir" "$(dirname "$version_file")"
+  printf '#!/usr/bin/env bash\n' > "$hook_dir/10-fzf.sh"
+  cat > "$version_file" <<'EOF'
+repo=https://github.com/OldJobobo/theme-hook-plugin-manager.git
+branch=thpm
+commit=local-commit
+EOF
+  cat > "$bin_dir/git" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$1" == "ls-remote" ]]; then
+  printf '%s\t%s\n' "remote-commit" "refs/heads/thpm"
+fi
+EOF
+  chmod +x "$bin_dir/git"
+
+  output="$(run_thpm_with_path "$home_dir" "$bin_dir" list)"
+
+  assert_contains "$output" "Update available: run thpm update" "thpm list reports available update"
+  assert_contains "$(cat "$home_dir/.local/share/thpm/update-check")" "status=update_available" "thpm caches update availability"
+}
+
+test_thpm_help_reports_cached_update_without_network() {
+  local home_dir="$TMP_ROOT/thpm-help-update-home"
+  local bin_dir="$TMP_ROOT/thpm-help-update-bin"
+  local version_file="$home_dir/.local/share/thpm/version"
+  local cache_file="$home_dir/.local/share/thpm/update-check"
+  local output
+  local now
+
+  now=$(date +%s)
+  mkdir -p "$bin_dir" "$(dirname "$version_file")"
+  cat > "$version_file" <<'EOF'
+repo=https://github.com/OldJobobo/theme-hook-plugin-manager.git
+branch=thpm
+commit=local-commit
+EOF
+  cat > "$cache_file" <<EOF
+checked_at=$now
+status=update_available
+remote_commit=remote-commit
+EOF
+  make_stub_bin "$bin_dir" git 'printf "git should not be called when cache is fresh\n" >&2; exit 1'
+
+  output="$(run_thpm_with_path "$home_dir" "$bin_dir" help)"
+
+  assert_contains "$output" "Update available: run thpm update" "thpm help reports cached update"
 }
 
 test_thpm_aliases() {
@@ -610,6 +669,73 @@ test_browser_plugins_skip_missing_profiles() {
   assert_contains "$output" "Zen Browser profile not found. Skipping.." "zen plugin skips missing profile"
   assert_file_missing "$home_dir/.mozilla/firefox/chrome/colors.css" "firefox plugin does not write fallback root profile"
   assert_file_missing "$home_dir/.zen/chrome/colors.css" "zen plugin does not write fallback root profile"
+}
+
+test_zen_plugin_uses_managed_imports_and_migrates_legacy_css() {
+  local home_dir="$TMP_ROOT/zen-managed-home"
+  local bin_dir="$TMP_ROOT/zen-managed-bin"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local profile_dir="$home_dir/.zen/default"
+  local user_chrome="$profile_dir/chrome/userChrome.css"
+  local user_content="$profile_dir/chrome/userContent.css"
+  local output
+
+  write_colors_fixture "$home_dir"
+  mkdir -p "$hook_dir" "$bin_dir" "$profile_dir/chrome"
+  cat > "$home_dir/.zen/profiles.ini" <<'EOF'
+[Install123]
+Default=default
+EOF
+  printf 'user_pref("toolkit.legacyUserProfileCustomizations.stylesheets", false);\n' > "$profile_dir/prefs.js"
+  cat > "$user_chrome" <<'EOF'
+@import url("./colors.css");
+:root {
+    --panel-separator-zap-gradient: linear-gradient(red, blue) !important;
+    --zen-main-browser-background: var(--base00) !important;
+}
+EOF
+  cat > "$user_content" <<'EOF'
+@import url("./colors.css");
+:root {
+    --newtab-background-color: var(--base01) !important;
+    --zen-main-browser-background: var(--base00) !important;
+}
+EOF
+  cat > "$profile_dir/chrome/colors.css" <<'EOF'
+:root {
+--color00: #000000;
+--color0F: #ffffff;
+}
+EOF
+  cp "$ROOT_DIR/theme-set.d/40-zen.sh" "$hook_dir/40-zen.sh"
+  chmod +x "$hook_dir/40-zen.sh"
+  make_stub_bin "$bin_dir" zen-browser 'exit 0'
+  make_stub_bin "$bin_dir" pgrep 'exit 1'
+  make_stub_bin "$bin_dir" notify-send 'exit 0'
+
+  output="$(PATH="$bin_dir:$PATH" run_theme_hooks "$home_dir" 2>&1)"
+
+  assert_contains "$output" "Zen Browser theme updated!" "zen plugin reports success"
+  assert_file_exists "$profile_dir/chrome/thpm-zen-colors.css" "zen plugin writes managed colors file"
+  assert_file_exists "$profile_dir/chrome/thpm-zen-userChrome.css" "zen plugin writes managed chrome stylesheet"
+  assert_file_exists "$profile_dir/chrome/thpm-zen-userContent.css" "zen plugin writes managed content stylesheet"
+  assert_contains "$(cat "$user_chrome")" '/* THPM Zen hook start */' "zen plugin inserts managed userChrome import marker"
+  assert_contains "$(cat "$user_chrome")" '@import url("./thpm-zen-userChrome.css");' "zen plugin imports managed userChrome stylesheet"
+  assert_not_contains "$(cat "$user_chrome")" "--panel-separator-zap-gradient" "zen plugin migrates legacy full userChrome body out"
+  assert_contains "$(cat "$user_content")" '@import url("./thpm-zen-userContent.css");' "zen plugin imports managed userContent stylesheet"
+  assert_not_contains "$(cat "$user_content")" "--newtab-background-color" "zen plugin migrates legacy full userContent body out"
+  assert_file_exists "$user_chrome.thpm-migrated.bak" "zen plugin backs up migrated legacy userChrome"
+  assert_file_exists "$user_content.thpm-migrated.bak" "zen plugin backs up migrated legacy userContent"
+  assert_file_missing "$profile_dir/chrome/colors.css" "zen plugin removes unused legacy colors file"
+  assert_contains "$(cat "$profile_dir/prefs.js")" 'user_pref("toolkit.legacyUserProfileCustomizations.stylesheets", true);' "zen plugin enables userChrome pref"
+
+  HOME="$home_dir" bash "$hook_dir/40-zen.sh" --cleanup
+
+  assert_file_missing "$profile_dir/chrome/thpm-zen-colors.css" "zen cleanup removes managed colors file"
+  assert_file_missing "$profile_dir/chrome/thpm-zen-userChrome.css" "zen cleanup removes managed chrome stylesheet"
+  assert_file_missing "$profile_dir/chrome/thpm-zen-userContent.css" "zen cleanup removes managed content stylesheet"
+  assert_not_contains "$(cat "$user_chrome")" "THPM Zen hook" "zen cleanup removes userChrome import marker"
+  assert_not_contains "$(cat "$user_content")" "THPM Zen hook" "zen cleanup removes userContent import marker"
 }
 
 test_qutebrowser_plugin_writes_theme_and_config() {
@@ -1273,6 +1399,7 @@ test_install_preserves_disabled_plugins_and_installs_files() {
   local legacy_thpm="$home_dir/.local/share/omarchy/bin/thpm"
   local installed_theme_set="$home_dir/.config/omarchy/hooks/theme-set"
   local installed_theme_env="$home_dir/.local/share/thpm/lib/theme-env.sh"
+  local installed_version="$home_dir/.local/share/thpm/version"
   local output
   local status
 
@@ -1300,6 +1427,7 @@ test_install_preserves_disabled_plugins_and_installs_files() {
   assert_file_missing "$legacy_thpm" "install removes legacy omarchy bin thpm"
   assert_file_missing "$installed_theme_set" "install removes old thpm theme-set dispatcher"
   assert_file_exists "$installed_theme_env" "install writes shared theme env"
+  assert_contains "$(cat "$installed_version")" "commit=local-install-commit" "install records installed commit"
   assert_file_exists "$hook_dir/00-fish.sh.sample" "install preserves disabled plugin as sample"
   assert_file_missing "$hook_dir/00-fish.sh" "install removes active file for disabled plugin"
   assert_file_exists "$hook_dir/30-vscode.sh" "install enables bundled plugins by default"
@@ -1525,11 +1653,12 @@ test_uninstall_removes_files_and_qutebrowser_theme() {
   local bin_dir="$TMP_ROOT/uninstall-bin"
   local output
 
-  mkdir -p "$bin_dir" "$home_dir/.local/bin" "$home_dir/.local/share/omarchy/bin" "$home_dir/.config/omarchy/hooks/theme-set.d" "$home_dir/.config/qutebrowser/omarchy"
+  mkdir -p "$bin_dir" "$home_dir/.local/bin" "$home_dir/.local/share/omarchy/bin" "$home_dir/.config/omarchy/hooks/theme-set.d" "$home_dir/.config/qutebrowser/omarchy" "$home_dir/.zen/default/chrome"
   printf '#!/usr/bin/env bash\n' > "$home_dir/.local/bin/thpm"
   printf '#!/usr/bin/env bash\n' > "$home_dir/.local/share/omarchy/bin/thpm"
   printf '# Omarchy 3.3+ uses colors.toml as the source of truth for theme colors.\n' > "$home_dir/.config/omarchy/hooks/theme-set"
   printf '#!/usr/bin/env bash\n' > "$home_dir/.config/omarchy/hooks/theme-set.d/00-fzf.sh"
+  cp "$ROOT_DIR/theme-set.d/40-zen.sh" "$home_dir/.config/omarchy/hooks/theme-set.d/40-zen.sh"
   printf '#!/usr/bin/env bash\n' > "$home_dir/.config/omarchy/hooks/theme-set.d/99-custom.sh"
   mkdir -p "$home_dir/.local/share/thpm/lib"
   printf '#!/usr/bin/env bash\n' > "$home_dir/.local/share/thpm/lib/theme-env.sh"
@@ -1538,6 +1667,16 @@ config.load_autoconfig()
 import omarchy.draw
 omarchy.draw.apply(c)
 EOF
+  cat > "$home_dir/.zen/profiles.ini" <<'EOF'
+[Install123]
+Default=default
+EOF
+  cat > "$home_dir/.zen/default/chrome/userChrome.css" <<'EOF'
+/* THPM Zen hook start */
+@import url("./thpm-zen-userChrome.css");
+/* THPM Zen hook end */
+EOF
+  printf 'managed\n' > "$home_dir/.zen/default/chrome/thpm-zen-userChrome.css"
 
   make_stub_bin "$bin_dir" omarchy-show-logo 'printf "logo\n"'
   make_stub_bin "$bin_dir" omarchy-show-done 'printf "done\n"'
@@ -1554,10 +1693,13 @@ EOF
   assert_file_missing "$home_dir/.local/share/omarchy/bin/thpm" "uninstall removes legacy omarchy bin thpm"
   assert_file_missing "$home_dir/.config/omarchy/hooks/theme-set" "uninstall removes theme-set hook"
   assert_file_missing "$home_dir/.config/omarchy/hooks/theme-set.d/00-fzf.sh" "uninstall removes bundled plugin"
+  assert_file_missing "$home_dir/.config/omarchy/hooks/theme-set.d/40-zen.sh" "uninstall removes zen plugin"
   assert_file_exists "$home_dir/.config/omarchy/hooks/theme-set.d/99-custom.sh" "uninstall preserves custom Omarchy hook"
   assert_file_missing "$home_dir/.local/share/thpm/lib/theme-env.sh" "uninstall removes shared theme env"
   assert_file_missing "$home_dir/.config/qutebrowser/omarchy" "uninstall removes qutebrowser theme directory"
   assert_eq "config.load_autoconfig()" "$(cat "$home_dir/.config/qutebrowser/config.py")" "uninstall removes qutebrowser config lines"
+  assert_file_missing "$home_dir/.zen/default/chrome/thpm-zen-userChrome.css" "uninstall removes managed zen stylesheet"
+  assert_not_contains "$(cat "$home_dir/.zen/default/chrome/userChrome.css")" "THPM Zen hook" "uninstall removes zen import block"
 }
 
 test_uninstall_invokes_external_revert_commands() {
@@ -1646,6 +1788,8 @@ main() {
   test_thpm_help
   test_thpm_enable_disable_and_list
   test_thpm_manages_custom_hooks
+  test_thpm_list_reports_available_update
+  test_thpm_help_reports_cached_update_without_network
   test_thpm_aliases
   test_thpm_open_uses_xdg_open_for_hook_dir
   test_thpm_gtk_post_enable_disable_updates_gsettings
@@ -1655,6 +1799,7 @@ main() {
   test_theme_set_sends_restart_notification
   test_hook_plugins_use_portable_assumption_guards
   test_browser_plugins_skip_missing_profiles
+  test_zen_plugin_uses_managed_imports_and_migrates_legacy_css
   test_qutebrowser_plugin_writes_theme_and_config
   test_qutebrowser_light_mode_change_requires_restart
   test_fzf_plugin_writes_fish_theme
