@@ -10,6 +10,10 @@ if [[ -z "${primary_background:-}" || -z "${primary_foreground:-}" ]]; then
     exit 0
 fi
 
+if ! command -v python3 >/dev/null 2>&1; then
+    skipped "Python 3"
+fi
+
 mapfile -d '' DATA_JSON_FILES < <(python3 <<'PYEOF'
 import json
 import os

@@ -8,18 +8,20 @@ if ! command -v firefox >/dev/null 2>&1; then
 fi
 
 find_default_profile() {
+    [[ -f "$HOME/.mozilla/firefox/profiles.ini" ]] || return 1
     awk -F= '
         /^\[Install/ { in_install=1 }
         in_install && /^Default=/ { print $2; exit }
     ' "$HOME/.mozilla/firefox/profiles.ini"
 }
 default_profile="$HOME/.mozilla/firefox/$(find_default_profile)"
+[[ -n "${default_profile##"$HOME/.mozilla/firefox/"}" && -d "$default_profile" ]] || skipped "Firefox profile"
 
 enable_userchrome() {
     local prefs_file="$default_profile/prefs.js"
     local pref_name="toolkit.legacyUserProfileCustomizations.stylesheets"
 
-    if grep -q "user_pref(\"$pref_name\"" "$prefs_file"; then
+    if [[ -f "$prefs_file" ]] && grep -q "user_pref(\"$pref_name\"" "$prefs_file"; then
         if grep -q "user_pref(\"$pref_name\", false)" "$prefs_file"; then
             sed -i.bak "s/user_pref(\"$pref_name\", false);/user_pref(\"$pref_name\", true);/" "$prefs_file"
         fi

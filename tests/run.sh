@@ -550,6 +550,44 @@ EOF
   assert_contains "$(cat "$notify_log")" "Sampleapp" "restart notification lists running app"
 }
 
+test_hook_plugins_use_portable_assumption_guards() {
+  assert_not_contains "$(cat "$ROOT_DIR/theme-set.d/10-discord.sh")" 'themes",' "discord plugin has no comma-suffixed Flatpak path"
+  assert_contains "$(cat "$ROOT_DIR/theme-set.d/10-discord.sh")" '$HOME/.var/app/com.discordapp.Discord/config/Vencord/themes' "discord plugin checks user Flatpak Discord path"
+  assert_contains "$(cat "$ROOT_DIR/theme-set.d/30-vscode.sh")" "command -v jq" "vscode plugin guards jq dependency"
+  assert_contains "$(cat "$ROOT_DIR/theme-set.d/30-cursor.sh")" "command -v jq" "cursor plugin guards jq dependency"
+  assert_contains "$(cat "$ROOT_DIR/theme-set.d/30-windsurf.sh")" "command -v jq" "windsurf plugin guards jq dependency"
+  assert_contains "$(cat "$ROOT_DIR/theme-set.d/30-vscode.sh")" 'skipped "VS Code Base16 Tinted Themes extension directory"' "vscode plugin skips missing extension directory"
+  assert_contains "$(cat "$ROOT_DIR/theme-set.d/30-cursor.sh")" 'skipped "Cursor Base16 Tinted Themes extension directory"' "cursor plugin skips missing extension directory"
+  assert_contains "$(cat "$ROOT_DIR/theme-set.d/40-steam.sh")" "command -v git" "steam plugin guards git dependency"
+  assert_not_contains "$(cat "$ROOT_DIR/theme-set.d/40-steam.sh")" "fc-list" "steam plugin does not probe unused fontconfig path"
+  assert_not_contains "$(cat "$ROOT_DIR/theme-set.d/40-steam.sh")" "omarchy-font-current" "steam plugin does not assume omarchy-font-current"
+  assert_not_contains "$(cat "$ROOT_DIR/theme-set.d/40-qutebrowser.sh")" "grep -oP" "qutebrowser plugin avoids grep -P dependency"
+  assert_contains "$(cat "$ROOT_DIR/theme-set.d/35-obsidian-terminal.sh")" "command -v python3" "obsidian terminal plugin guards python3 dependency"
+  assert_not_contains "$(cat "$ROOT_DIR/theme-set.d/20-nwg-dock-hyprland.sh")" "eval" "nwg dock plugin avoids eval when restarting dock"
+}
+
+test_browser_plugins_skip_missing_profiles() {
+  local home_dir="$TMP_ROOT/browser-missing-profile-home"
+  local bin_dir="$TMP_ROOT/browser-missing-profile-bin"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local output
+
+  write_colors_fixture "$home_dir"
+  mkdir -p "$hook_dir" "$bin_dir"
+  cp "$ROOT_DIR/theme-set.d/40-firefox.sh" "$hook_dir/40-firefox.sh"
+  cp "$ROOT_DIR/theme-set.d/40-zen.sh" "$hook_dir/40-zen.sh"
+  chmod +x "$hook_dir/40-firefox.sh" "$hook_dir/40-zen.sh"
+  make_stub_bin "$bin_dir" firefox 'exit 0'
+  make_stub_bin "$bin_dir" zen-browser 'exit 0'
+
+  output="$(PATH="$bin_dir:$PATH" run_theme_hooks "$home_dir" 2>&1)"
+
+  assert_contains "$output" "Firefox profile not found. Skipping.." "firefox plugin skips missing profile"
+  assert_contains "$output" "Zen Browser profile not found. Skipping.." "zen plugin skips missing profile"
+  assert_file_missing "$home_dir/.mozilla/firefox/chrome/colors.css" "firefox plugin does not write fallback root profile"
+  assert_file_missing "$home_dir/.zen/chrome/colors.css" "zen plugin does not write fallback root profile"
+}
+
 test_qutebrowser_plugin_writes_theme_and_config() {
   local home_dir="$TMP_ROOT/qutebrowser-home"
   local bin_dir="$TMP_ROOT/qutebrowser-bin"
@@ -1590,6 +1628,8 @@ main() {
   test_theme_env_errors_without_colors_file
   test_theme_set_reports_hook_failure
   test_theme_set_sends_restart_notification
+  test_hook_plugins_use_portable_assumption_guards
+  test_browser_plugins_skip_missing_profiles
   test_qutebrowser_plugin_writes_theme_and_config
   test_qutebrowser_light_mode_change_requires_restart
   test_fzf_plugin_writes_fish_theme

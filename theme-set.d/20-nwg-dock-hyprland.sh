@@ -16,6 +16,20 @@ fi
 user_dock_command=""
 hypr_config_dir="$HOME/.config/hypr"
 
+start_dock() {
+  local command="$1"
+  local -a args
+
+  if [[ "$command" =~ [\;\&\|\`\$\<\>] ]]; then
+    warning "Ignoring nwg-dock-hyprland command with shell metacharacters."
+    command="$default_dock_command"
+  fi
+
+  read -r -a args <<< "$command"
+  "${args[@]}" &
+  disown
+}
+
 if [[ -d "$hypr_config_dir" ]]; then
   # Find all config files containing nwg-dock-hyprland exec commands
   mapfile -t dock_files < <(grep -l -E "^\s*(exec|exec-once)\s*=.*nwg-dock-hyprland" "$hypr_config_dir"/*.conf 2>/dev/null)
@@ -35,7 +49,13 @@ if [[ -d "$hypr_config_dir" ]]; then
   # Extract the command from first match
   if [[ ${#dock_commands[@]} -gt 0 ]]; then
     # Remove 'exec' or 'exec-once' prefix and '=' sign, trim whitespace
-    user_dock_command=$(echo "${dock_commands[0]}" | sed 's/^[[:space:]]*exec\(-once\)\?[[:space:]]*=[[:space:]]*//')
+    user_dock_command="${dock_commands[0]}"
+    user_dock_command="${user_dock_command#"${user_dock_command%%[![:space:]]*}"}"
+    user_dock_command="${user_dock_command#exec-once}"
+    user_dock_command="${user_dock_command#exec}"
+    user_dock_command="${user_dock_command#"${user_dock_command%%[![:space:]=]*}"}"
+    user_dock_command="${user_dock_command#=}"
+    user_dock_command="${user_dock_command#"${user_dock_command%%[![:space:]]*}"}"
 
     # Validate extraction succeeded
     if [[ -z "$user_dock_command" || ! "$user_dock_command" =~ nwg-dock-hyprland ]]; then
@@ -74,7 +94,7 @@ EOF
 mkdir -p "$HOME/.config/nwg-dock-hyprland"
 style_file="$HOME/.config/nwg-dock-hyprland/style.css"
 if [[ ! -f $style_file ]]; then
-  cat > $style_file <<EOF
+  cat > "$style_file" <<EOF
 @import url("./colors.css");
 
 window {
@@ -116,11 +136,9 @@ killall nwg-dock-hyprland 2>/dev/null
 
 # Restart dock with user's command or default
 if [[ -n "$user_dock_command" ]]; then
-  eval "$user_dock_command" &
-  disown
+  start_dock "$user_dock_command"
 else
-  eval "$default_dock_command" &
-  disown
+  start_dock "$default_dock_command"
 fi
 
 success "Dock theme updated!"

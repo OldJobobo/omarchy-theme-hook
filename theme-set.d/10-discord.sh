@@ -7,10 +7,9 @@ possible_paths=(
     "$HOME/.config/vesktop/themes"
     "$HOME/.config/Equicord/themes"
     "$HOME/.config/equibop/themes"
-    "/var/lib/flatpak/app/com.discordapp.Discord/themes"
-    "/var/lib/flatpak/app/dev.vencord.Vesktop/themes"
-    "/var/lib/flatpak/app/io.github.equicord.equibop/themes",
+    "$HOME/.var/app/com.discordapp.Discord/config/Vencord/themes"
     "$HOME/.var/app/dev.vencord.Vesktop/config/vesktop/themes"
+    "$HOME/.var/app/io.github.equicord.equibop/config/equibop/themes"
 )
 
 create_dynamic_theme() {
@@ -69,7 +68,7 @@ check_for_theme() {
                 if [[ -f "$path/vencord.theme.css" ]]; then
                     rm "$path/vencord.theme.css"
                 fi
-                cp -f $HOME/.config/omarchy/current/theme/vencord.theme.css "$path/vencord.theme.css"
+                cp -f "$HOME/.config/omarchy/current/theme/vencord.theme.css" "$path/vencord.theme.css"
             fi
 
             for file in "$path"/*; do

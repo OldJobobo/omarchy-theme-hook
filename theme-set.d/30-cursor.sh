@@ -6,6 +6,10 @@ if ! command -v cursor >/dev/null 2>&1; then
     skipped "Cursor"
 fi
 
+if ! command -v jq >/dev/null 2>&1; then
+    skipped "jq"
+fi
+
 # check current theme for vscode.json
 if [[ -f "$HOME/.config/omarchy/current/theme/vscode.json" ]]; then
     exit 0
@@ -1252,13 +1256,14 @@ fi
 extension_name="tintedtheming.base16-tinted-themes"
 
 install_cursor_extension() {
-    is_extension_installed=$(cursor --list-extensions | grep "${extension_name}")
+    is_extension_installed=$(cursor --list-extensions | grep -Fx "${extension_name}")
     if [[ -z "$is_extension_installed" ]]; then
-        cursor --install-extension $extension_name
+        cursor --install-extension "$extension_name"
         sleep 3
     fi
 }
 
+install_path=""
 cursor_paths=(
     "$HOME/.cursor/extensions/"
 )
@@ -1268,13 +1273,16 @@ find_cursor_extension_dir() {
             install_path=$(find "$path" -maxdepth 1 -type d -name "${extension_name}-*" | head -n1)
         fi
     done
+    if [[ -z "$install_path" ]]; then
+        skipped "Cursor Base16 Tinted Themes extension directory"
+    fi
 }
 
 modify_extension_manifest() {
-    omarchy_entry=$(cat $install_path/package.json | jq 'first(.contributes.themes[] | select(.label == "Omarchy"))')
+    omarchy_entry=$(jq 'first(.contributes.themes[] | select(.label == "Omarchy"))' "$install_path/package.json")
     if [[ -z "$omarchy_entry" ]]; then
         omarchy_entry='{"label": "Omarchy", "uiTheme": "vs-dark", "path": "./themes/base16/omarchy.json"}'
-        new_manifest=$(cat "${install_path}/package.json" | jq --argjson theme "$omarchy_entry" '.contributes.themes += [$theme]')
+        new_manifest=$(jq --argjson theme "$omarchy_entry" '.contributes.themes += [$theme]' "${install_path}/package.json")
         echo "$new_manifest" > "${install_path}/package.json"
     fi
 }
@@ -1284,6 +1292,7 @@ find_cursor_extension_dir
 modify_extension_manifest
 
 install_location="$install_path/themes/base16/omarchy.json"
+mkdir -p "$(dirname "$install_location")"
 cp "$output_file" "$install_location"
 
 require_restart "cursor"

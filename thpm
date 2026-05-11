@@ -60,9 +60,7 @@ get_hook_list() {
 }
 
 enable_hooks() {
-    hooks="$@"
-    IFS=' ' read -ra hooks_array <<< "$hooks"
-    hooks_array=("${hooks_array[@]:1}")
+    hooks_array=("${@:2}")
     for new_hook in "${hooks_array[@]}"; do
         found=0
         if [[ -d "$HOOK_DIR" ]]; then
@@ -91,9 +89,7 @@ enable_hooks() {
 }
 
 disable_hooks() {
-    hooks="$@"
-    IFS=' ' read -ra hooks_array <<< "$hooks"
-    hooks_array=("${hooks_array[@]:1}")
+    hooks_array=("${@:2}")
     for new_hook in "${hooks_array[@]}"; do
         found=0
         if [[ -d "$HOOK_DIR" ]]; then
@@ -133,12 +129,14 @@ post_enable() {
             echo -e "$(dot "muted")Please read the FAQ to disable Firefox theming."
         ;;
         "gtk")
-            if [ -f "$HOME/.config/omarchy/current/theme/light.mode" ]; then
-                gsettings set org.gnome.desktop.interface gtk-theme adw-gtk3-tmp
-                gsettings set org.gnome.desktop.interface gtk-theme adw-gtk3
-            else
-                gsettings set org.gnome.desktop.interface gtk-theme adw-gtk3-tmp-dark
-                gsettings set org.gnome.desktop.interface gtk-theme adw-gtk3-dark
+            if command -v gsettings >/dev/null 2>&1; then
+                if [ -f "$HOME/.config/omarchy/current/theme/light.mode" ]; then
+                    gsettings set org.gnome.desktop.interface gtk-theme adw-gtk3-tmp
+                    gsettings set org.gnome.desktop.interface gtk-theme adw-gtk3
+                else
+                    gsettings set org.gnome.desktop.interface gtk-theme adw-gtk3-tmp-dark
+                    gsettings set org.gnome.desktop.interface gtk-theme adw-gtk3-dark
+                fi
             fi
         ;;
         "spotify")
@@ -148,9 +146,11 @@ post_enable() {
         ;;
         "steam")
             adwaita_location=$HOME/.local/share/steam-adwaita
-            cd $adwaita_location && ./install.py \
-                --color-theme omarchy \
-                --extras library/hide_whats_new > /dev/null 2>&1
+            if [[ -x "$adwaita_location/install.py" ]]; then
+                cd "$adwaita_location" && ./install.py \
+                    --color-theme omarchy \
+                    --extras library/hide_whats_new > /dev/null 2>&1
+            fi
         ;;
         "vicinae")
             vicinae theme set omarchy > /dev/null 2>&1
@@ -174,10 +174,12 @@ post_disable() {
             echo -e "$(dot "muted")Please read the FAQ to disable Firefox theming."
         ;;
         "gtk")
-            if [ -f "$HOME/.config/omarchy/current/theme/light.mode" ]; then
-                gsettings set org.gnome.desktop.interface gtk-theme Adwaita
-            else
-                gsettings set org.gnome.desktop.interface gtk-theme Adwaita-dark
+            if command -v gsettings >/dev/null 2>&1; then
+                if [ -f "$HOME/.config/omarchy/current/theme/light.mode" ]; then
+                    gsettings set org.gnome.desktop.interface gtk-theme Adwaita
+                else
+                    gsettings set org.gnome.desktop.interface gtk-theme Adwaita-dark
+                fi
             fi
         ;;
         "spotify")
@@ -187,8 +189,10 @@ post_disable() {
         ;;
         "steam")
             adwaita_location=$HOME/.local/share/steam-adwaita
-            cd $adwaita_location && ./install.py \
-                --uninstall > /dev/null 2>&1
+            if [[ -x "$adwaita_location/install.py" ]]; then
+                cd "$adwaita_location" && ./install.py \
+                    --uninstall > /dev/null 2>&1
+            fi
         ;;
         "vicinae")
             vicinae theme set vicinae-dark > /dev/null 2>&1

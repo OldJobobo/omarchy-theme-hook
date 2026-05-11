@@ -21,7 +21,7 @@ fi
 # Check if light/dark mode changed from previous theme
 prev_scheme=""
 if [[ -f "$draw_file" ]]; then
-    prev_scheme=$(grep -oP "preferred_color_scheme = '\K[^']+" "$draw_file" 2>/dev/null)
+    prev_scheme=$(sed -n "s/.*preferred_color_scheme = '\([^']*\)'.*/\1/p" "$draw_file" | head -n 1)
 fi
 
 mkdir -p "$theme_dir"

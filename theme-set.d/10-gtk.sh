@@ -187,12 +187,12 @@ if [ ! -d "$gtk4_dir" ]; then
 fi
 
 if [ -f "$output_file" ]; then
-    if [ ! -f "$gtk3_dir/gtk.css.backup" ]; then
+    if [ -f "$gtk3_file" ] && [ ! -f "$gtk3_dir/gtk.css.backup" ]; then
         cp "$gtk3_file" "$gtk3_dir/gtk.css.backup"
     fi
     cp -f "$output_file" "$gtk3_file"
 
-    if [ ! -f "$gtk4_dir/gtk.css.backup" ]; then
+    if [ -f "$gtk4_file" ] && [ ! -f "$gtk4_dir/gtk.css.backup" ]; then
         cp "$gtk4_file" "$gtk4_dir/gtk.css.backup"
     fi
     cp -f "$output_file" "$gtk4_file"
@@ -202,17 +202,21 @@ else
     cp "$output_file" "$gtk4_file"
 fi
 
-if [ -f "$light_file" ]; then
-    gsettings set org.gnome.desktop.interface color-scheme "prefer-light"
-    gsettings set org.gnome.desktop.interface gtk-theme adw-gtk3-tmp
-    gsettings set org.gnome.desktop.interface gtk-theme adw-gtk3
-else
-    gsettings set org.gnome.desktop.interface color-scheme "prefer-dark"
-    gsettings set org.gnome.desktop.interface gtk-theme adw-gtk3-tmp-dark
-    gsettings set org.gnome.desktop.interface gtk-theme adw-gtk3-dark
+if command -v gsettings >/dev/null 2>&1; then
+    if [ -f "$light_file" ]; then
+        gsettings set org.gnome.desktop.interface color-scheme "prefer-light"
+        gsettings set org.gnome.desktop.interface gtk-theme adw-gtk3-tmp
+        gsettings set org.gnome.desktop.interface gtk-theme adw-gtk3
+    else
+        gsettings set org.gnome.desktop.interface color-scheme "prefer-dark"
+        gsettings set org.gnome.desktop.interface gtk-theme adw-gtk3-tmp-dark
+        gsettings set org.gnome.desktop.interface gtk-theme adw-gtk3-dark
+    fi
 fi
 
-pkill -f xdg-desktop-portal-gtk
+if command -v pkill >/dev/null 2>&1; then
+    pkill -f xdg-desktop-portal-gtk
+fi
 
 require_restart "nautilus"
 success "GTK theme updated!"

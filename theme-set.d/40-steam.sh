@@ -11,6 +11,10 @@ if ! command -v python >/dev/null 2>&1; then
     skipped "Python 3"
 fi
 
+if ! command -v git >/dev/null 2>&1; then
+    skipped "Git"
+fi
+
 cat > "$output_file" << EOF
 :root {
     /* The main accent color and the matching text value */
@@ -94,21 +98,20 @@ cat > "$output_file" << EOF
 EOF
 
 adwaita_location=$HOME/.local/share/steam-adwaita
-font_path=$(fc-list $(omarchy-font-current) file | grep -ioP '.*\.ttf' | head -n 1)
 
 install_steam_theme() {
     if [[ ! -d "$adwaita_location" ]]; then
-        git clone https://github.com/tkashkin/Adwaita-for-Steam $adwaita_location > /dev/null 2>&1
+        git clone https://github.com/tkashkin/Adwaita-for-Steam "$adwaita_location" > /dev/null 2>&1
     fi
 }
 modify_steam_theme() {
     if [[ ! -d "$adwaita_location/adwaita/colorthemes/omarchy" ]]; then
-        mkdir $adwaita_location/adwaita/colorthemes/omarchy/
+        mkdir -p "$adwaita_location/adwaita/colorthemes/omarchy/"
     fi
 }
 modify_install_script() {
     if ! grep -q "omarchy" "$adwaita_location/install.py"; then
-        sed -i.bak 's/\("cantarell"\)/\1, "omarchy"/' $adwaita_location/install.py
+        sed -i.bak 's/\("cantarell"\)/\1, "omarchy"/' "$adwaita_location/install.py"
     fi
 }
 
@@ -123,7 +126,7 @@ fi
 
 cp -p -f "$output_file" "$adwaita_location/adwaita/colorthemes/omarchy/omarchy.css"
 
-cd $adwaita_location && ./install.py \
+cd "$adwaita_location" && ./install.py \
     --color-theme omarchy \
     --extras library/hide_whats_new > /dev/null 2>&1
 
