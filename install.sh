@@ -3,6 +3,7 @@
 set -e
 
 THPM_BRANCH="${THPM_BRANCH:-thpm}"
+THPM_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
 
 # Install prerequisites
 if ! pacman -Qi "adw-gtk-theme" &>/dev/null; then
@@ -128,6 +129,46 @@ repo=https://github.com/OldJobobo/theme-hook-plugin-manager.git
 branch=$THPM_BRANCH
 commit=$install_commit
 EOF
+
+# Install default user config without overwriting local edits.
+mkdir -p "$THPM_CONFIG_HOME/thpm"
+if [[ ! -f "$THPM_CONFIG_HOME/thpm/config.toml" ]]; then
+    cat > "$THPM_CONFIG_HOME/thpm/config.toml" <<'EOF'
+[paths]
+hook_dir = "~/.config/omarchy/hooks/theme-set.d"
+state_dir = "~/.local/share/thpm"
+theme_env = "~/.local/share/thpm/lib/theme-env.sh"
+colors_file = "~/.config/omarchy/current/theme/colors.toml"
+
+[updates]
+check = true
+check_interval_seconds = 86400
+
+[notifications]
+enabled = true
+backend = "auto" # auto, notify-send, stdout, off
+
+[notifications.restart]
+enabled = true
+only_when_running = true
+cooldown_seconds = 300
+title = "Theme Hook Plugin Manager"
+message = "{app} requires a restart to apply theme."
+
+[notifications.restart.apps]
+steam = true
+nautilus = true
+firefox = true
+zen-browser = true
+qutebrowser = true
+code = true
+cursor = true
+windsurf = true
+typora = true
+heroic = true
+spf = true
+EOF
+fi
 
 # Remove the old thpm dispatcher if this install previously owned it. Omarchy
 # now runs theme-set.d hooks directly, so no dispatcher is needed.

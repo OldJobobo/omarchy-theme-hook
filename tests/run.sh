@@ -7,6 +7,9 @@ TEST_FAILURES=0
 TEST_ASSERTIONS=0
 OMARCHY_CONTRACT_FILE="$ROOT_DIR/tests/omarchy-defaults.contract"
 
+unset XDG_CONFIG_HOME
+unset THPM_CONFIG_FILE
+
 cleanup() {
   rm -rf "$TMP_ROOT"
 }
@@ -1889,6 +1892,7 @@ test_install_preserves_disabled_plugins_and_installs_files() {
   local installed_theme_set="$home_dir/.config/omarchy/hooks/theme-set"
   local installed_theme_env="$home_dir/.local/share/thpm/lib/theme-env.sh"
   local installed_version="$home_dir/.local/share/thpm/version"
+  local installed_config="$home_dir/.config/thpm/config.toml"
   local output
   local status
 
@@ -1916,9 +1920,35 @@ test_install_preserves_disabled_plugins_and_installs_files() {
   assert_file_missing "$installed_theme_set" "install removes old thpm theme-set dispatcher"
   assert_file_exists "$installed_theme_env" "install writes shared theme env"
   assert_contains "$(cat "$installed_version")" "commit=local-install-commit" "install records installed commit"
+  assert_file_exists "$installed_config" "install writes default config.toml"
+  assert_contains "$(cat "$installed_config")" "[notifications.restart.apps]" "default config documents restart app controls"
   assert_file_exists "$hook_dir/00-fish.sh.sample" "install preserves disabled plugin as sample"
   assert_file_missing "$hook_dir/00-fish.sh" "install removes active file for disabled plugin"
   assert_file_exists "$hook_dir/30-vscode.sh" "install enables bundled plugins by default"
+}
+
+test_install_preserves_existing_config() {
+  local home_dir="$TMP_ROOT/install-config-home"
+  local bin_dir="$TMP_ROOT/install-config-bin"
+  local config_file="$home_dir/.config/thpm/config.toml"
+  local status
+
+  rm -f "$TMP_ROOT/install-git-branch.log"
+  rm -f "$TMP_ROOT/install-git-args.log"
+  mkdir -p "$bin_dir" "$(dirname "$config_file")"
+  printf '[notifications.restart]\nenabled = false\n' > "$config_file"
+  make_stub_bin "$bin_dir" pacman 'exit 0'
+  make_stub_bin "$bin_dir" sudo 'printf "sudo should not be called\n" >&2; exit 1'
+  make_stub_bin "$bin_dir" omarchy-hook 'exit 0'
+  make_stub_bin "$bin_dir" omarchy-show-done 'exit 0'
+  make_install_git_stub "$bin_dir"
+
+  PATH="$bin_dir:$PATH" HOME="$home_dir" "$ROOT_DIR/install.sh" >/dev/null 2>&1
+  status=$?
+
+  assert_success "$status" "install with existing config exits successfully"
+  assert_eq "[notifications.restart]
+enabled = false" "$(cat "$config_file")" "install preserves existing config.toml"
 }
 
 test_install_keeps_non_executable_hooks_enabled() {
@@ -2442,6 +2472,7 @@ main() {
   test_cursor_plugin_suppresses_electron_deprecation_warning
   test_theme_set_extracts_colors_with_leading_whitespace_and_comments
   test_install_preserves_disabled_plugins_and_installs_files
+  test_install_preserves_existing_config
   test_install_keeps_non_executable_hooks_enabled
   test_install_recovers_all_bundled_plugins_disabled_by_bad_update
   test_install_recovery_preserves_custom_sample_hooks
