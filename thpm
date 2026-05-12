@@ -1,12 +1,107 @@
 #!/usr/bin/env bash
 
-HOOK_DIR="${THPM_HOOK_DIR:-$HOME/.config/omarchy/hooks/theme-set.d}"
-THPM_STATE_DIR="${THPM_STATE_DIR:-$HOME/.local/share/thpm}"
+THPM_CONFIG_FILE="${THPM_CONFIG_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/thpm/config.toml}"
+
+thpm_config_get() {
+    local section="$1"
+    local key="$2"
+
+    [[ -f "$THPM_CONFIG_FILE" ]] || return 1
+    awk -v wanted_section="$section" -v wanted_key="$key" '
+        function trim(value) {
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+            return value
+        }
+        function strip_comment(value,    i, char, quote, escaped, out) {
+            quote = ""
+            escaped = 0
+            out = ""
+            for (i = 1; i <= length(value); i++) {
+                char = substr(value, i, 1)
+                if (escaped) {
+                    out = out char
+                    escaped = 0
+                    continue
+                }
+                if (char == "\\") {
+                    out = out char
+                    escaped = 1
+                    continue
+                }
+                if ((char == "\"" || char == "'\''") && quote == "") {
+                    quote = char
+                } else if (char == quote) {
+                    quote = ""
+                }
+                if (char == "#" && quote == "") {
+                    break
+                }
+                out = out char
+            }
+            return out
+        }
+        {
+            line = trim(strip_comment($0))
+            if (line == "") next
+            if (line ~ /^\[[A-Za-z0-9_.-]+\]$/) {
+                current_section = substr(line, 2, length(line) - 2)
+                next
+            }
+            split_at = index(line, "=")
+            if (split_at == 0 || current_section != wanted_section) next
+            current_key = trim(substr(line, 1, split_at - 1))
+            if (current_key != wanted_key) next
+            value = trim(substr(line, split_at + 1))
+            if ((substr(value, 1, 1) == "\"" && substr(value, length(value), 1) == "\"") ||
+                (substr(value, 1, 1) == "'\''" && substr(value, length(value), 1) == "'\''")) {
+                value = substr(value, 2, length(value) - 2)
+            }
+            print value
+            found = 1
+            exit
+        }
+        END { exit found ? 0 : 1 }
+    ' "$THPM_CONFIG_FILE"
+}
+
+thpm_expand_path() {
+    local path="$1"
+
+    case "$path" in
+        "~") printf '%s\n' "$HOME" ;;
+        \~/*) printf '%s/%s\n' "$HOME" "${path#\~/}" ;;
+        *) printf '%s\n' "$path" ;;
+    esac
+}
+
+thpm_config_path() {
+    local section="$1"
+    local key="$2"
+    local default="$3"
+    local value
+
+    value="$(thpm_config_get "$section" "$key" 2>/dev/null || true)"
+    thpm_expand_path "${value:-$default}"
+}
+
+thpm_config_value() {
+    local section="$1"
+    local key="$2"
+    local default="$3"
+    local value
+
+    value="$(thpm_config_get "$section" "$key" 2>/dev/null || true)"
+    printf '%s\n' "${value:-$default}"
+}
+
+HOOK_DIR="${THPM_HOOK_DIR:-$(thpm_config_path paths hook_dir "$HOME/.config/omarchy/hooks/theme-set.d")}"
+THPM_STATE_DIR="${THPM_STATE_DIR:-$(thpm_config_path paths state_dir "$HOME/.local/share/thpm")}"
 THPM_VERSION_FILE="${THPM_VERSION_FILE:-$THPM_STATE_DIR/version}"
 THPM_UPDATE_CACHE="${THPM_UPDATE_CACHE:-$THPM_STATE_DIR/update-check}"
-THPM_UPDATE_CHECK_INTERVAL="${THPM_UPDATE_CHECK_INTERVAL:-86400}"
-THPM_THEME_ENV_DEFAULT="${THPM_THEME_ENV:-$HOME/.local/share/thpm/lib/theme-env.sh}"
-THPM_COLORS_FILE_DEFAULT="${THPM_COLORS_FILE:-$HOME/.config/omarchy/current/theme/colors.toml}"
+THPM_UPDATE_CHECK_INTERVAL="${THPM_UPDATE_CHECK_INTERVAL:-$(thpm_config_value updates check_interval_seconds 86400)}"
+THPM_UPDATE_CHECK="${THPM_UPDATE_CHECK:-$(thpm_config_value updates check true)}"
+THPM_THEME_ENV_DEFAULT="${THPM_THEME_ENV:-$(thpm_config_path paths theme_env "$HOME/.local/share/thpm/lib/theme-env.sh")}"
+THPM_COLORS_FILE_DEFAULT="${THPM_COLORS_FILE:-$(thpm_config_path paths colors_file "$HOME/.config/omarchy/current/theme/colors.toml")}"
 
 dot() {
     dot_char=" "
@@ -61,7 +156,7 @@ maybe_show_update_notice() {
     local checked_at
     local status
 
-    [[ "${THPM_UPDATE_CHECK:-1}" != "0" ]] || return 0
+    [[ "$THPM_UPDATE_CHECK" != "0" && "$THPM_UPDATE_CHECK" != "false" ]] || return 0
     command -v git >/dev/null 2>&1 || return 0
 
     repo="$(version_value repo)"

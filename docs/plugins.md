@@ -87,6 +87,21 @@ Plugins can use these helper functions:
 
 Use `skipped` for missing apps or optional files. Use `error` only when the plugin actually failed.
 
+`require_restart` is controlled by `${XDG_CONFIG_HOME:-$HOME/.config}/thpm/config.toml`. Users can turn restart notices off globally with:
+
+```toml
+[notifications.restart]
+enabled = false
+```
+
+Or disable one app by process name:
+
+```toml
+[notifications.restart.apps]
+steam = false
+nautilus = false
+```
+
 ## Example Plugin
 
 ```bash

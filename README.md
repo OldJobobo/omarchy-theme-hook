@@ -101,6 +101,56 @@ thpm remove
 
 `thpm list` and `thpm help` may show a cached notice when a newer commit is available. They do not update files automatically; run `thpm update` to install updates.
 
+## Configuration
+
+Optional user configuration lives at:
+
+```text
+${XDG_CONFIG_HOME:-$HOME/.config}/thpm/config.toml
+```
+
+Set `THPM_CONFIG_FILE=/path/to/config.toml` to use a different file. Existing environment overrides still take priority over config values, including `THPM_HOOK_DIR`, `THPM_STATE_DIR`, `THPM_THEME_ENV`, and `THPM_COLORS_FILE`.
+
+Example:
+
+```toml
+[paths]
+hook_dir = "~/.config/omarchy/hooks/theme-set.d"
+state_dir = "~/.local/share/thpm"
+theme_env = "~/.local/share/thpm/lib/theme-env.sh"
+colors_file = "~/.config/omarchy/current/theme/colors.toml"
+
+[updates]
+check = true
+check_interval_seconds = 86400
+
+[notifications]
+enabled = true
+backend = "auto" # auto, notify-send, stdout, off
+
+[notifications.restart]
+enabled = true
+only_when_running = true
+cooldown_seconds = 300
+title = "Theme Hook Plugin Manager"
+message = "{app} requires a restart to apply theme."
+
+[notifications.restart.apps]
+steam = true
+nautilus = true
+firefox = true
+zen-browser = true
+qutebrowser = true
+code = true
+cursor = true
+windsurf = true
+typora = true
+heroic = true
+spf = true
+```
+
+Restart notification app keys match the process name passed by a plugin to `require_restart`, for example `steam`, `nautilus`, or `zen-browser`.
+
 ## Custom Plugins
 
 Put custom plugins in:

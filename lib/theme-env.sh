@@ -3,7 +3,117 @@
 # Shared runtime for thpm theme hooks. Omarchy runs hooks in
 # ~/.config/omarchy/hooks/theme-set.d directly, so every bundled plugin
 # sources this file to load the current theme colors and helper functions.
-input_file="${THPM_COLORS_FILE:-$HOME/.config/omarchy/current/theme/colors.toml}"
+THPM_CONFIG_FILE="${THPM_CONFIG_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/thpm/config.toml}"
+
+thpm_config_get() {
+    local section="$1"
+    local key="$2"
+
+    [[ -f "$THPM_CONFIG_FILE" ]] || return 1
+    awk -v wanted_section="$section" -v wanted_key="$key" '
+        function trim(value) {
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+            return value
+        }
+        function strip_comment(value,    i, char, quote, escaped, out) {
+            quote = ""
+            escaped = 0
+            out = ""
+            for (i = 1; i <= length(value); i++) {
+                char = substr(value, i, 1)
+                if (escaped) {
+                    out = out char
+                    escaped = 0
+                    continue
+                }
+                if (char == "\\") {
+                    out = out char
+                    escaped = 1
+                    continue
+                }
+                if ((char == "\"" || char == "'\''") && quote == "") {
+                    quote = char
+                } else if (char == quote) {
+                    quote = ""
+                }
+                if (char == "#" && quote == "") {
+                    break
+                }
+                out = out char
+            }
+            return out
+        }
+        {
+            line = trim(strip_comment($0))
+            if (line == "") next
+            if (line ~ /^\[[A-Za-z0-9_.-]+\]$/) {
+                current_section = substr(line, 2, length(line) - 2)
+                next
+            }
+            split_at = index(line, "=")
+            if (split_at == 0 || current_section != wanted_section) next
+            current_key = trim(substr(line, 1, split_at - 1))
+            if (current_key != wanted_key) next
+            value = trim(substr(line, split_at + 1))
+            if ((substr(value, 1, 1) == "\"" && substr(value, length(value), 1) == "\"") ||
+                (substr(value, 1, 1) == "'\''" && substr(value, length(value), 1) == "'\''")) {
+                value = substr(value, 2, length(value) - 2)
+            }
+            print value
+            found = 1
+            exit
+        }
+        END { exit found ? 0 : 1 }
+    ' "$THPM_CONFIG_FILE"
+}
+
+thpm_expand_path() {
+    local path="$1"
+
+    case "$path" in
+        "~") printf '%s\n' "$HOME" ;;
+        \~/*) printf '%s/%s\n' "$HOME" "${path#\~/}" ;;
+        *) printf '%s\n' "$path" ;;
+    esac
+}
+
+thpm_config_path() {
+    local section="$1"
+    local key="$2"
+    local default="$3"
+    local value
+
+    value="$(thpm_config_get "$section" "$key" 2>/dev/null || true)"
+    thpm_expand_path "${value:-$default}"
+}
+
+thpm_config_value() {
+    local section="$1"
+    local key="$2"
+    local default="$3"
+    local value
+
+    value="$(thpm_config_get "$section" "$key" 2>/dev/null || true)"
+    printf '%s\n' "${value:-$default}"
+}
+
+thpm_truthy() {
+    case "$1" in
+        1|true|TRUE|True|yes|YES|Yes|on|ON|On) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+THPM_STATE_DIR="${THPM_STATE_DIR:-$(thpm_config_path paths state_dir "$HOME/.local/share/thpm")}"
+THPM_NOTIFICATION_ENABLED="$(thpm_config_value notifications enabled true)"
+THPM_NOTIFICATION_BACKEND="$(thpm_config_value notifications backend auto)"
+THPM_RESTART_NOTIFICATION_ENABLED="$(thpm_config_value notifications.restart enabled true)"
+THPM_RESTART_NOTIFICATION_ONLY_RUNNING="$(thpm_config_value notifications.restart only_when_running true)"
+THPM_RESTART_NOTIFICATION_COOLDOWN="$(thpm_config_value notifications.restart cooldown_seconds 300)"
+THPM_RESTART_NOTIFICATION_TITLE="$(thpm_config_value notifications.restart title "Theme Hook Plugin Manager")"
+THPM_RESTART_NOTIFICATION_MESSAGE="$(thpm_config_value notifications.restart message "{app} requires a restart to apply theme.")"
+
+input_file="${THPM_COLORS_FILE:-$(thpm_config_path paths colors_file "$HOME/.config/omarchy/current/theme/colors.toml")}"
 
 success() {
     echo -e "\e[32m[SUCCESS]\e[0m $1"
@@ -82,14 +192,59 @@ change_shade() {
 require_restart() {
     local process_name="$1"
     local display_name="${2:-${process_name^}}"
+    local app_enabled
+    local message
+    local cooldown_file
+    local now
+    local last_notified
 
-    if command -v pgrep >/dev/null 2>&1 && pgrep -x "$process_name" >/dev/null; then
-        if command -v notify-send >/dev/null 2>&1; then
-            notify-send "Theme Hook Plugin Manager" "$display_name requires a restart to apply theme."
-        else
-            warning "$display_name requires a restart to apply theme."
-        fi
+    thpm_truthy "$THPM_NOTIFICATION_ENABLED" || return 0
+    thpm_truthy "$THPM_RESTART_NOTIFICATION_ENABLED" || return 0
+
+    app_enabled="$(thpm_config_value notifications.restart.apps "$process_name" true)"
+    thpm_truthy "$app_enabled" || return 0
+
+    if thpm_truthy "$THPM_RESTART_NOTIFICATION_ONLY_RUNNING"; then
+        command -v pgrep >/dev/null 2>&1 || return 0
+        pgrep -x "$process_name" >/dev/null || return 0
     fi
+
+    if [[ "$THPM_RESTART_NOTIFICATION_COOLDOWN" =~ ^[0-9]+$ ]] && (( THPM_RESTART_NOTIFICATION_COOLDOWN > 0 )); then
+        cooldown_file="$THPM_STATE_DIR/restart-notified-${process_name//[^A-Za-z0-9_.-]/_}"
+        now=$(date +%s)
+        if [[ -f "$cooldown_file" ]]; then
+            last_notified="$(cat "$cooldown_file" 2>/dev/null || true)"
+            if [[ "$last_notified" =~ ^[0-9]+$ ]] && (( now - last_notified < THPM_RESTART_NOTIFICATION_COOLDOWN )); then
+                return 0
+            fi
+        fi
+        mkdir -p "$THPM_STATE_DIR" 2>/dev/null || true
+        printf '%s\n' "$now" > "$cooldown_file" 2>/dev/null || true
+    fi
+
+    message="${THPM_RESTART_NOTIFICATION_MESSAGE//\{app\}/$display_name}"
+    case "$THPM_NOTIFICATION_BACKEND" in
+        off)
+            return 0
+            ;;
+        stdout)
+            warning "$message"
+            ;;
+        notify-send)
+            if command -v notify-send >/dev/null 2>&1; then
+                notify-send "$THPM_RESTART_NOTIFICATION_TITLE" "$message"
+            else
+                warning "$message"
+            fi
+            ;;
+        auto|*)
+            if command -v notify-send >/dev/null 2>&1; then
+                notify-send "$THPM_RESTART_NOTIFICATION_TITLE" "$message"
+            else
+                warning "$message"
+            fi
+            ;;
+    esac
 }
 
 primary_foreground=$(extract_color "foreground")

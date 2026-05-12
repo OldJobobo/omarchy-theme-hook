@@ -240,14 +240,14 @@ run_theme_hooks() {
 run_thpm() {
   local home_dir="$1"
   shift
-  HOME="$home_dir" "$ROOT_DIR/thpm" "$@" 2>&1
+  HOME="$home_dir" XDG_CONFIG_HOME="$home_dir/.config" "$ROOT_DIR/thpm" "$@" 2>&1
 }
 
 run_thpm_with_path() {
   local home_dir="$1"
   local bin_dir="$2"
   shift 2
-  PATH="$bin_dir:$PATH" HOME="$home_dir" "$ROOT_DIR/thpm" "$@" 2>&1
+  PATH="$bin_dir:$PATH" HOME="$home_dir" XDG_CONFIG_HOME="$home_dir/.config" "$ROOT_DIR/thpm" "$@" 2>&1
 }
 
 test_shell_syntax() {
@@ -304,7 +304,7 @@ test_project_omarchy_default_contract() {
   shared_runtime="$(contract_value SHARED_RUNTIME)"
 
   assert_file_exists "$OMARCHY_CONTRACT_FILE" "Omarchy defaults contract file exists"
-  assert_contains "$(cat "$ROOT_DIR/thpm")" "HOOK_DIR=\"\${THPM_HOOK_DIR:-\$HOME/$hook_dir}\"" "thpm default hook directory matches Omarchy contract"
+  assert_contains "$(cat "$ROOT_DIR/thpm")" "thpm_config_path paths hook_dir \"\$HOME/$hook_dir\"" "thpm default hook directory matches Omarchy contract"
   assert_contains "$(cat "$ROOT_DIR/thpm")" "omarchy-hook \"$hook_name\"" "thpm run invokes contracted Omarchy hook"
   assert_contains "$(cat "$ROOT_DIR/install.sh")" "\$HOME/$hook_dir" "install writes hooks to contracted Omarchy hook directory"
   assert_contains "$(cat "$ROOT_DIR/install.sh")" "omarchy-hook $hook_name" "install reapplies contracted Omarchy hook"
@@ -387,6 +387,45 @@ test_thpm_manages_custom_hooks() {
   assert_contains "$output" "Plugin Disabled: custom-widget" "thpm disables custom hook by suffix name"
   assert_file_exists "$hook_dir/99-custom-widget.sh.sample" "thpm adds custom hook .sample suffix"
   assert_file_missing "$hook_dir/99-custom-widget.sh" "thpm removes active custom hook file"
+}
+
+test_thpm_reads_hook_dir_from_config() {
+  local home_dir="$TMP_ROOT/thpm-config-home"
+  local config_dir="$home_dir/.config/thpm"
+  local hook_dir="$home_dir/custom-hooks"
+  local output
+
+  mkdir -p "$config_dir" "$hook_dir"
+  cat > "$config_dir/config.toml" <<'EOF'
+[paths]
+hook_dir = "~/custom-hooks"
+EOF
+  printf '#!/usr/bin/env bash\n' > "$hook_dir/10-configured.sh"
+
+  output="$(HOME="$home_dir" XDG_CONFIG_HOME="$home_dir/.config" "$ROOT_DIR/thpm" list 2>&1)"
+
+  assert_contains "$output" "configured" "thpm reads hook directory from config.toml"
+}
+
+test_thpm_env_hook_dir_overrides_config() {
+  local home_dir="$TMP_ROOT/thpm-env-config-home"
+  local config_dir="$home_dir/.config/thpm"
+  local configured_hook_dir="$home_dir/configured-hooks"
+  local env_hook_dir="$home_dir/env-hooks"
+  local output
+
+  mkdir -p "$config_dir" "$configured_hook_dir" "$env_hook_dir"
+  cat > "$config_dir/config.toml" <<'EOF'
+[paths]
+hook_dir = "~/configured-hooks"
+EOF
+  printf '#!/usr/bin/env bash\n' > "$configured_hook_dir/10-configured.sh"
+  printf '#!/usr/bin/env bash\n' > "$env_hook_dir/10-env.sh"
+
+  output="$(HOME="$home_dir" XDG_CONFIG_HOME="$home_dir/.config" THPM_HOOK_DIR="$env_hook_dir" "$ROOT_DIR/thpm" list 2>&1)"
+
+  assert_contains "$output" "env" "THPM_HOOK_DIR overrides configured hook directory"
+  assert_not_contains "$output" "configured" "config hook directory is ignored when THPM_HOOK_DIR is set"
 }
 
 test_thpm_list_reports_available_update() {
@@ -881,6 +920,117 @@ EOF
   assert_file_exists "$notify_log" "theme-set sends notification for running restart target"
   assert_contains "$(cat "$notify_log")" "Theme Hook Plugin Manager" "restart notification has title"
   assert_contains "$(cat "$notify_log")" "Sampleapp" "restart notification lists running app"
+}
+
+test_theme_env_reads_colors_file_from_config() {
+  local home_dir="$TMP_ROOT/theme-env-config-colors-home"
+  local config_dir="$home_dir/.config/thpm"
+  local colors_file="$home_dir/custom-colors.toml"
+  local output_file="$TMP_ROOT/config-colors-output"
+
+  mkdir -p "$config_dir"
+  write_colors_fixture "$home_dir/default"
+  cp "$home_dir/default/.config/omarchy/current/theme/colors.toml" "$colors_file"
+  cat > "$config_dir/config.toml" <<'EOF'
+[paths]
+colors_file = "~/custom-colors.toml"
+EOF
+  cat > "$home_dir/config-colors-hook.sh" <<EOF
+#!/usr/bin/env bash
+source "$ROOT_DIR/lib/theme-env.sh"
+printf '%s\n' "\$primary_background" > "$output_file"
+EOF
+
+  HOME="$home_dir" XDG_CONFIG_HOME="$home_dir/.config" bash "$home_dir/config-colors-hook.sh"
+
+  assert_eq "101112" "$(cat "$output_file")" "theme env reads colors_file from config.toml"
+}
+
+test_restart_notification_can_be_disabled_globally() {
+  local home_dir="$TMP_ROOT/restart-global-disabled-home"
+  local bin_dir="$TMP_ROOT/restart-global-disabled-bin"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local notify_log="$TMP_ROOT/restart-global-disabled-notify.log"
+
+  write_colors_fixture "$home_dir"
+  mkdir -p "$hook_dir" "$bin_dir" "$home_dir/.config/thpm"
+  cat > "$home_dir/.config/thpm/config.toml" <<'EOF'
+[notifications.restart]
+enabled = false
+EOF
+  make_stub_bin "$bin_dir" pgrep '[[ "$2" == "steam" ]]'
+  cat > "$bin_dir/notify-send" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" > "$notify_log"
+EOF
+  chmod +x "$bin_dir/notify-send"
+  cat > "$hook_dir/10-restart.sh" <<'EOF'
+#!/usr/bin/env bash
+source "$THPM_THEME_ENV"
+require_restart steam
+EOF
+
+  XDG_CONFIG_HOME="$home_dir/.config" PATH="$bin_dir:$PATH" run_theme_hooks "$home_dir"
+
+  assert_file_missing "$notify_log" "restart notification can be disabled globally"
+}
+
+test_restart_notification_can_be_disabled_for_app() {
+  local home_dir="$TMP_ROOT/restart-app-disabled-home"
+  local bin_dir="$TMP_ROOT/restart-app-disabled-bin"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local notify_log="$TMP_ROOT/restart-app-disabled-notify.log"
+
+  write_colors_fixture "$home_dir"
+  mkdir -p "$hook_dir" "$bin_dir" "$home_dir/.config/thpm"
+  cat > "$home_dir/.config/thpm/config.toml" <<'EOF'
+[notifications.restart.apps]
+nautilus = false
+EOF
+  make_stub_bin "$bin_dir" pgrep '[[ "$2" == "nautilus" ]]'
+  cat > "$bin_dir/notify-send" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" > "$notify_log"
+EOF
+  chmod +x "$bin_dir/notify-send"
+  cat > "$hook_dir/10-restart.sh" <<'EOF'
+#!/usr/bin/env bash
+source "$THPM_THEME_ENV"
+require_restart nautilus
+EOF
+
+  XDG_CONFIG_HOME="$home_dir/.config" PATH="$bin_dir:$PATH" run_theme_hooks "$home_dir"
+
+  assert_file_missing "$notify_log" "restart notification can be disabled for one app"
+}
+
+test_restart_notification_supports_stdout_and_not_running() {
+  local home_dir="$TMP_ROOT/restart-stdout-home"
+  local bin_dir="$TMP_ROOT/restart-stdout-bin"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local output
+
+  write_colors_fixture "$home_dir"
+  mkdir -p "$hook_dir" "$bin_dir" "$home_dir/.config/thpm"
+  cat > "$home_dir/.config/thpm/config.toml" <<'EOF'
+[notifications]
+backend = "stdout"
+
+[notifications.restart]
+only_when_running = false
+message = "Restart {app} after theming."
+cooldown_seconds = 0
+EOF
+  make_stub_bin "$bin_dir" pgrep 'exit 1'
+  cat > "$hook_dir/10-restart.sh" <<'EOF'
+#!/usr/bin/env bash
+source "$THPM_THEME_ENV"
+require_restart steam Steam
+EOF
+
+  output="$(XDG_CONFIG_HOME="$home_dir/.config" PATH="$bin_dir:$PATH" run_theme_hooks "$home_dir" 2>&1)"
+
+  assert_contains "$output" "Restart Steam after theming." "restart notification can use stdout without a running process"
 }
 
 test_hook_plugins_use_portable_assumption_guards() {
@@ -2240,6 +2390,8 @@ main() {
   test_thpm_help
   test_thpm_enable_disable_and_list
   test_thpm_manages_custom_hooks
+  test_thpm_reads_hook_dir_from_config
+  test_thpm_env_hook_dir_overrides_config
   test_thpm_list_reports_available_update
   test_thpm_help_reports_cached_update_without_network
   test_thpm_aliases
@@ -2258,6 +2410,10 @@ main() {
   test_theme_env_errors_without_colors_file
   test_theme_set_reports_hook_failure
   test_theme_set_sends_restart_notification
+  test_theme_env_reads_colors_file_from_config
+  test_restart_notification_can_be_disabled_globally
+  test_restart_notification_can_be_disabled_for_app
+  test_restart_notification_supports_stdout_and_not_running
   test_hook_plugins_use_portable_assumption_guards
   test_browser_plugins_skip_missing_profiles
   test_zen_plugin_uses_managed_imports_and_migrates_legacy_css
